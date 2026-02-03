@@ -24,3 +24,31 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@layer utilities {
+  /* 크롬, 사파리, 엣지용 커스텀 스크롤바 */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 10px; /* 스크롤바 너비 (얇게) */
+    height: 10px; /* 가로 스크롤바 높이 */
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #1e1e1e; /* 트랙 색상 (배경이랑 똑같이) */
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #4b5563; /* 핸들 색상 (진한 회색) */
+    border-radius: 9999px; /* 둥글게 */
+    border: 2px solid #1e1e1e; /* 트랙과 핸들 사이 여백 효과 */
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #6b7280; /* 호버 시 약간 밝게 */
+  }
+
+  /* 파이어폭스용 */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #4b5563 #1e1e1e;
+  }
+}
