@@ -25,6 +25,20 @@ export default function Home() {
     setCurrentDate(new Date());
   }, []);
 
+  // [NEW] 모바일 메뉴 열림/닫힘 시 바디 스크롤 잠금/해제
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+
+    // 컴포넌트가 사라질 때(언마운트) 안전하게 스크롤 복구
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [isMobileMenuOpen]);
+
   const handleReservationClick = (res: Reservation) => {
     setSelectedReservation(res);
     setIsDetailModalOpen(true);
@@ -77,15 +91,15 @@ export default function Home() {
             md:flex 
           `}
         >
-          <div className="md:hidden flex justify-end">
+          {/* <div className="md:hidden flex justify-end">
             <button
               onClick={() => setIsMobileMenuOpen(false)}
               className="text-gray-400"
             >
               <X className="w-6 h-6" />
             </button>
-          </div>
-          <div>
+          </div> */}
+          <div className="mt-2">
             <MiniCalendar
               selectedDate={currentDate}
               onSelectDate={(date) => {
@@ -104,7 +118,7 @@ export default function Home() {
         <section className="flex-1 flex flex-col overflow-hidden bg-[#121212] w-full relative">
           {/* [수정] 탭 스위처: 정렬과 크기 개선 */}
           {/* 1. md:justify-start 제거 -> 항상 중앙 정렬(justify-center) 유지 */}
-          <div className="flex-shrink-0 px-4 pt-4 pb-2 flex justify-center">
+          <div className="flex-shrink-0 px-4 pt-2 pb-2 flex justify-center">
             <div className="bg-[#252525] p-1 rounded-lg flex items-center border border-gray-800">
               <button
                 onClick={() => setViewMode("timetable")}

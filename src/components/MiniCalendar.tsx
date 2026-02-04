@@ -113,7 +113,7 @@ export default function MiniCalendar({
         })}
       </div>
 
-      <div className="pt-1 border-t-2 border-gray-800/50 text-center">
+      <div className="pt-2 border-gray-800/50 text-center">
         <p className="text-[11px] text-gray-500">
           날짜를 눌러 원하는 일자로 이동하세요
         </p>

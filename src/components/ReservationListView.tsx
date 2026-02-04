@@ -57,16 +57,16 @@ export default function ReservationListView({ onItemClick }: Props) {
   }
 
   return (
-    <div className="h-full overflow-y-auto custom-scrollbar p-1 md:p-2 pb-20">
-      <div className="max-w-5xl mx-auto space-y-8">
+    <div className="h-full overflow-y-auto custom-scrollbar pb-20">
+      <div className="max-w-5xl mx-auto space-y-8 px-3 md:px-6 py-4">
         {dateKeys.map((dateStr) => (
           <div
             key={dateStr}
             className="animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
             {/* 날짜 헤더 */}
-            <h3 className="text-lg md:text-xl font-bold text-gray-100 mb-3 md:mb-4 flex items-center gap-2 sticky top-0 bg-[#121212]/95 backdrop-blur-sm py-2 z-10 border-b border-gray-800">
-              <span className="w-1.5 h-6 bg-blue-500 rounded-full"></span>
+            <h3 className="text-lg md:text-xl font-bold text-gray-100 mb-2 md:mb-4 flex items-center gap-2 sticky top-0 bg-[#121212]/95 backdrop-blur-sm pb-3 z-10 border-b border-gray-800 -mx-3 px-3 md:-mx-6 md:px-6">
+              <span className="w-1 h-6 bg-blue-500 rounded-full"></span>
               {getHeaderDate(dateStr)}
             </h3>
 
