@@ -2,6 +2,24 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/utils/supabase";
 import { Reservation } from "@/types";
 import { formatToDbDate } from "@/utils/date";
+import { mockEvents } from "@/mocks/events_mock"; 
+import type { Ensemble } from "@/types/ensemble_detail";
+
+
+const USE_MOCK = true;
+
+const mockUserName = "노윤지"; // 모달에 보여줄 임시 예약자
+
+const ensembleToReservation = (e: Ensemble): Reservation => ({
+  id: e.id,
+  user_name: mockUserName,
+  purpose: e.title,          // UI의 '목적/예약명'에 합주 제목 넣기
+  date: e.date,
+  start_time: e.start_time,
+  end_time: e.end_time,
+  created_at: e.created_at,
+});
+
 
 // [Read] 특정 기간(주간/월간)의 예약 가져오기
 export const useReservations = (startDate: Date, endDate: Date) => {
@@ -12,6 +30,16 @@ export const useReservations = (startDate: Date, endDate: Date) => {
       formatToDbDate(endDate),
     ],
     queryFn: async () => {
+      if (USE_MOCK) {
+        // ✅ 기간 필터링까지 해주면 화면이 자연스럽게 동작
+        const start = formatToDbDate(startDate);
+        const end = formatToDbDate(endDate);
+
+        return mockEvents
+          .filter((e) => e.date >= start && e.date <= end)
+          .map(ensembleToReservation);
+      }
+
       const { data, error } = await supabase
         .from("reservations")
         .select("*")
@@ -30,6 +58,15 @@ export const useUpcomingReservations = () => {
   return useQuery({
     queryKey: ["reservations", "upcoming"],
     queryFn: async () => {
+      if (USE_MOCK) {
+        const today = formatToDbDate(new Date());
+        return mockEvents
+          .filter((e) => e.date >= today)
+          .sort((a, b) => (a.date + a.start_time).localeCompare(b.date + b.start_time))
+          .slice(0, 20)
+          .map(ensembleToReservation);
+      }
+
       const today = formatToDbDate(new Date());
       const { data, error } = await supabase
         .from("reservations")
@@ -51,6 +88,7 @@ export const useAddReservation = () => {
 
   return useMutation({
     mutationFn: async (newRes: Omit<Reservation, "id" | "created_at">) => {
+      if (USE_MOCK) return;  // ✅ 아무것도 안 함
       const { error } = await supabase.from("reservations").insert(newRes);
       if (error) throw error;
     },
@@ -72,6 +110,7 @@ export const useDeleteReservation = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      if (USE_MOCK) return;  // ✅ 아무것도 안 함
       const { error } = await supabase
         .from("reservations")
         .delete()
@@ -94,6 +133,13 @@ export const useAllUpcomingReservations = () => {
   return useQuery({
     queryKey: ["reservations", "all_upcoming"], // 키 분리
     queryFn: async () => {
+      if (USE_MOCK) {
+        const today = formatToDbDate(new Date());
+        return mockEvents
+          .filter((e) => e.date >= today)
+          .sort((a, b) => (a.date + a.start_time).localeCompare(b.date + b.start_time))
+          .map(ensembleToReservation);
+      }
       const today = formatToDbDate(new Date());
       const { data, error } = await supabase
         .from("reservations")
