@@ -3,9 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { ko } from "date-fns/locale";
-import { X, Calendar, Clock, User, Trash2, Quote } from "lucide-react";
+import { X, Calendar, Clock, User, Trash2, ExternalLink } from "lucide-react";
 import { Reservation } from "@/types";
 import { useDeleteReservation } from "@/hooks/useReservations";
+import { useRouter } from "next/navigation";
 
 interface ReservationDetailModalProps {
   isOpen: boolean;
@@ -22,6 +23,12 @@ export default function ReservationDetailModal({
 }: ReservationDetailModalProps) {
   const [isVisible, setIsVisible] = useState(false);
   const deleteMutation = useDeleteReservation();
+  const router = useRouter();
+
+  const handleGoDetail = () => {
+    onClose();
+    router.push(`/event/${reservation.id}`);
+  };
 
   useEffect(() => {
     if (isOpen) setIsVisible(true);
@@ -136,7 +143,14 @@ export default function ReservationDetailModal({
               </div>
             </div>
           </div>
-
+         {/* 상세보기 버튼 */}
+         <button
+           onClick={handleGoDetail}
+           className="w-full py-4 rounded-xl border border-blue-900/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 flex items-center justify-center gap-2 transition-all group"
+         >
+           <ExternalLink className="w-5 h-5 group-hover:scale-110 transition-transform" />
+          <span className="font-bold">상세보기</span>
+          </button>
           {/* 하단 삭제 버튼 */}
           <button
             onClick={handleDelete}
