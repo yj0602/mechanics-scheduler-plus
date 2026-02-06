@@ -1,7 +1,7 @@
 // src/components/ensemble/ensembleInfoSection.tsx
 "use client"
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import type { Ensemble, Participant } from "@/types/ensemble_detail";
 import { 
   Calendar, 

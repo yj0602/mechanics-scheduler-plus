@@ -7,6 +7,7 @@ export interface Reservation {
   date: string; // 'YYYY-MM-DD' 형식
   start_time: string; // 'HH:mm' 형식
   end_time: string; // 'HH:mm' 형식
+  kind?: "ensemble" | "concert";
   created_at: string;
 }
 

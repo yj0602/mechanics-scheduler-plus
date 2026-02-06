@@ -2,22 +2,35 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/utils/supabase";
 import { Reservation } from "@/types";
 import { formatToDbDate } from "@/utils/date";
-import { mockEvents } from "@/mocks/events_mock"; 
+import { mockEvents, mockConcert } from "@/mocks/events_mock"; 
 import type { Ensemble } from "@/types/ensemble_detail";
+import type { Concert } from "@/types/concert_detail";
 
 
 const USE_MOCK = true;
 
-const mockUserName = "노윤지"; // 모달에 보여줄 임시 예약자
+const mockUserName = "장혁재"; // 모달에 보여줄 임시 예약자
 
 const ensembleToReservation = (e: Ensemble): Reservation => ({
   id: e.id,
   user_name: mockUserName,
-  purpose: e.title,          // UI의 '목적/예약명'에 합주 제목 넣기
+  purpose: e.title,
+  kind: "ensemble",
   date: e.date,
   start_time: e.start_time,
   end_time: e.end_time,
   created_at: e.created_at,
+});
+
+const concertToReservation = (c: Concert): Reservation => ({
+  id: c.id,
+  user_name: mockUserName,
+  purpose: `🌟 ${c.title}`,
+  kind: "concert",
+  date: c.date,
+  start_time: c.start_time,
+  end_time: c.end_time,
+  created_at: c.created_at,
 });
 
 
@@ -35,9 +48,15 @@ export const useReservations = (startDate: Date, endDate: Date) => {
         const start = formatToDbDate(startDate);
         const end = formatToDbDate(endDate);
 
-        return mockEvents
+        return [ 
+          ...mockEvents
           .filter((e) => e.date >= start && e.date <= end)
-          .map(ensembleToReservation);
+          .map(ensembleToReservation),
+
+          ...mockConcert
+          .filter((c) => c.date >= start && c.date <= end)
+          .map(concertToReservation),
+        ];
       }
 
       const { data, error } = await supabase
@@ -60,11 +79,12 @@ export const useUpcomingReservations = () => {
     queryFn: async () => {
       if (USE_MOCK) {
         const today = formatToDbDate(new Date());
-        return mockEvents
-          .filter((e) => e.date >= today)
+        return [
+          ...mockEvents.filter((e) => e.date >= today).map(ensembleToReservation),
+          ...mockConcert.filter((c) => c.date >= today).map(concertToReservation),
+        ]
           .sort((a, b) => (a.date + a.start_time).localeCompare(b.date + b.start_time))
-          .slice(0, 20)
-          .map(ensembleToReservation);
+          .slice(0, 20);
       }
 
       const today = formatToDbDate(new Date());
@@ -135,10 +155,11 @@ export const useAllUpcomingReservations = () => {
     queryFn: async () => {
       if (USE_MOCK) {
         const today = formatToDbDate(new Date());
-        return mockEvents
-          .filter((e) => e.date >= today)
-          .sort((a, b) => (a.date + a.start_time).localeCompare(b.date + b.start_time))
-          .map(ensembleToReservation);
+
+        return [
+          ...mockEvents.filter((e) => e.date >= today).map(ensembleToReservation),
+          ...mockConcert.filter((c) => c.date >= today).map(concertToReservation),
+        ].sort((a, b) => (a.date + a.start_time).localeCompare(b.date + b.start_time));
       }
       const today = formatToDbDate(new Date());
       const { data, error } = await supabase

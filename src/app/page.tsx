@@ -59,7 +59,7 @@ export default function Home() {
       <header className="flex items-center justify-between px-4 py-2 md:px-6 md:py-4 bg-[#1a1a1a] border-b border-gray-800 flex-shrink-0 relative z-40">
         <h1 className="text-xl font-bold text-gray-100 flex items-center gap-2">
           <span className="md:hidden">📅 예약 시스템</span>
-          <span className="hidden md:inline">📅 동아리방 예약 시스템</span>
+          <span className="hidden md:inline">📅 미케닉스 스케쥴러</span>
         </h1>
         <button
           className="md:hidden p-2 text-gray-300 hover:text-white"

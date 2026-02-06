@@ -18,7 +18,7 @@ import {
 
 type Props = {
   concert: Concert;
-  setList: SetListItem[];
+  setList?: SetListItem[];
   memo?: string;
 };
 
