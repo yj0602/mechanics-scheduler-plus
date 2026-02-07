@@ -346,7 +346,7 @@ const startEdit = () => {
 
               {/* 리허설 정보 */}
               <div
-                className={`group relative rounded-2xl p-5 border flex flex-col h-[180px] transition-all duration-300 ${
+                className={`group relative rounded-2xl p-5 border flex flex-col min-h-[180px] transition-all duration-300 ${
                   isEditing
                     ? "border-violet-500/50 bg-[#0a0a0a] shadow-[0_0_20px_rgba(139,92,246,0.1)]"
                     : "border-white/5 bg-white/[0.02] hover:bg-white/[0.04]"
@@ -391,7 +391,7 @@ const startEdit = () => {
 
               {/* 본 공연 정보 */}
               <div
-                className={`group relative rounded-2xl p-5 border flex flex-col h-[180px] transition-all duration-300 ${
+                className={`group relative rounded-2xl p-5 border flex flex-col min-h-[180px] transition-all duration-300 ${
                   isEditing
                     ? "border-blue-500/50 bg-[#0a0a0a] shadow-[0_0_20px_rgba(59,130,246,0.1)]"
                     : "border-white/10 bg-gradient-to-br from-violet-500/5 to-blue-500/5"
