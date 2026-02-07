@@ -2,10 +2,12 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Check, User } from "lucide-react";
+import { timeToMinutes } from "@/utils/date";
 
 export default function ReservationEnsembleSelect() {
     const [userName, setUserName] = useState("");
     const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [ensembleData, setEnsembleData] = useState<any>(null);
 
     const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
     const [isAddingSession, setIsAddingSession] = useState(false);
@@ -15,16 +17,86 @@ export default function ReservationEnsembleSelect() {
     const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
     const [isDragging, setIsDragging] = useState(false);
     const [dragMode, setDragMode] = useState<"add" | "remove" | null>(null);
+    const [sessions, setSessions] = useState<string[]>([
+        "보컬",
+        "기타",
+        "베이스",
+        "드럼",
+        "키보드",
+    ]);
 
-    const days = ["월", "화", "수", "목", "금", "토"];
+    // Page1 데이터 불러오기 (Hydration 에러 방지를 위해 useEffect 사용)
+    useEffect(() => {
+        const saved = localStorage.getItem("ensembleDraft");
+        if (saved) setEnsembleData(JSON.parse(saved));
+    }, []);
+    // 드래그 이벤트
+    useEffect(() => {
+        if (!isDragging) return;
+        const stopDrag = () => {
+            setIsDragging(false);
+            setDragMode(null);
+        };
+        window.addEventListener("pointerup", stopDrag);
+        window.addEventListener("pointercancel", stopDrag);
+        window.addEventListener("blur", stopDrag);
+        return () => {
+            window.removeEventListener("pointerup", stopDrag);
+            window.removeEventListener("pointercancel", stopDrag);
+            window.removeEventListener("blur", stopDrag);
+        };
+    }, [isDragging]);
+    // 세션 추가 취소 (바깥 영역 클릭 감지)
+    useEffect(() => {
+        if (!isAddingSession) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            if (
+            addSessionRef.current &&
+            !addSessionRef.current.contains(e.target as Node)
+            ) {
+            setIsAddingSession(false);
+            setNewSessionName("");
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [isAddingSession]);
+
+    // Page 1에서 정한 날짜들로 days 배열 구성
+    const days = useMemo(() => {
+        if (!ensembleData?.dates) return [];
+        const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+        
+        return ensembleData.dates.map((d: string) => {
+            const date = new Date(d);
+            const month = d.split('-')[1].replace(/^0/, ''); // '02' -> '2'
+            const day = d.split('-')[2].replace(/^0/, '');   // '03' -> '3'
+            
+            return {
+                dateDisplay: `${month}/${day}`, // '2/3' 형태
+                weekDay: dayNames[date.getDay()] // '화'
+            };
+        });
+    }, [ensembleData]);
+
+    // Page 1에서 정한 시간 범위(startTime ~ endTime)로 30분 단위 times 생성
     const times = useMemo(() => {
-    const result: string[] = [];
-        for (let h = 9; h < 18; h++) {
-            result.push(`${String(h).padStart(2, "0")}:00`);
-            result.push(`${String(h).padStart(2, "0")}:30`);
+        if (!ensembleData) return [];
+        
+        const startTotal = timeToMinutes(ensembleData.startTime);
+        const endTotal = timeToMinutes(ensembleData.endTime);
+        const result: string[] = [];
+
+        // 시작 시간부터 종료 시간 직전까지 30분씩 증가
+        for (let m = startTotal; m < endTotal; m += 30) {
+            const h = Math.floor(m / 60);
+            const min = m % 60;
+            result.push(`${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`);
         }
         return result;
-    }, []);
+    }, [ensembleData]);
 
     // 시간 셀 드래그 (데스크탑+모바일 모두 가능하게)
     const handleCellPointerDown = (key: string) => {
@@ -60,30 +132,7 @@ export default function ReservationEnsembleSelect() {
         setIsDragging(false);
         setDragMode(null);
     };
-    useEffect(() => {
-        if (!isDragging) return;
-        const stopDrag = () => {
-            setIsDragging(false);
-            setDragMode(null);
-        };
-        window.addEventListener("pointerup", stopDrag);
-        window.addEventListener("pointercancel", stopDrag);
-        window.addEventListener("blur", stopDrag);
-        return () => {
-            window.removeEventListener("pointerup", stopDrag);
-            window.removeEventListener("pointercancel", stopDrag);
-            window.removeEventListener("blur", stopDrag);
-        };
-    }, [isDragging]);
-
-    // 기본 세션 종류
-    const [sessions, setSessions] = useState<string[]>([
-        "보컬",
-        "기타",
-        "베이스",
-        "드럼",
-        "키보드",
-    ]);
+    
     // 세션 중복 선택 가능
     const toggleSession = (session: string) => {
         setSelectedSessions(prev => {
@@ -114,25 +163,11 @@ export default function ReservationEnsembleSelect() {
         setNewSessionName("");
         setIsAddingSession(false);
     };
-    // 세션 추가 취소 (바깥 영역 클릭 감지)
-    useEffect(() => {
-        if (!isAddingSession) return;
 
-        const handleClickOutside = (e: MouseEvent) => {
-            if (
-            addSessionRef.current &&
-            !addSessionRef.current.contains(e.target as Node)
-            ) {
-            setIsAddingSession(false);
-            setNewSessionName("");
-            }
-        };
-
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
-    }, [isAddingSession]);
+    // 데이터가 로딩 중일 때 처리
+    if (!ensembleData) {
+        return <div className="min-h-screen bg-[#0d1117] flex items-center justify-center text-gray-500">정보를 불러오는 중...</div>;
+    }
 
 
   return (
@@ -161,17 +196,10 @@ export default function ReservationEnsembleSelect() {
       </header>
 
       <main className="w-full max-w-2xl">
-        {/* 합주 제목 */}
+        {/* 합주 제목 동적 표시 */}
         <div className="mb-10 text-center">
-            <div
-                className="
-                inline-block w-full max-w-md
-                text-3xl font-extrabold text-center
-                bg-[#161b22] py-4 rounded-2xl
-                text-[#f0f6fc]
-                "
-            >
-                합주 제목
+            <div className="inline-block w-full max-w-md text-3xl font-extrabold text-center bg-[#161b22] py-4 rounded-2xl text-[#f0f6fc]">
+                {ensembleData.title}
             </div>
         </div>
 
@@ -183,12 +211,24 @@ export default function ReservationEnsembleSelect() {
             </h3>
 
             <div className="bg-[#161b22] border border-[#30363d] rounded-3xl p-4 md:p-6 shadow-xl overflow-x-auto">
-              <div className="grid grid-cols-[60px_repeat(6,1fr)] min-w-[300px]">
+                {/* 동적으로 변하는 days.length에 맞춰 그리드 생성 */}
+                <div 
+                    className="grid text-xs sticky top-0 bg-[#161b22] z-10 pt-2"
+                    style={{ gridTemplateColumns: `60px repeat(${days.length}, 1fr)` }}
+                >
                 <div />
-                {days.map((d) => (
-                  <div key={d} className="text-center mb-2 text-xs text-gray-400 font-bold">
-                    {d}
-                  </div>
+                {days.map((d, idx) => (
+                    <div key={idx} className="flex flex-col items-center mb-4 select-none">
+                        {/* 요일: 작고, 얇고, 연한 회색 */}
+                        <span className="text-[10px] font-normal text-gray-500 mb-0.5">
+                            {d.weekDay}
+                        </span>
+                        
+                        {/* 날짜: 조금 더 크고, 어두운 회색 (중요도에 따라 색상 조절) */}
+                        <span className="text-[13px] font-medium text-[#484f58]">
+                            {d.dateDisplay}
+                        </span>
+                    </div>
                 ))}
 
                 {times.map((t) => {
@@ -196,7 +236,7 @@ export default function ReservationEnsembleSelect() {
                     return (
                         <div key={t} className="contents">
                             {/* 시간 라벨: 정시에만 표시하거나 작게 표시 */}
-                            <div className={`text-[11px] pr-2 flex items-start justify-end text-gray-400 font-medium ${isHour ? "mt-[-8px]" : "invisible"}`}>
+                            <div className={`text-[10px] pr-2 flex items-start justify-end text-gray-500 ${isHour ? "mt-[-6px]" : "invisible"}`}>
                                 {t}
                             </div>
                             {days.map((d) => {
@@ -220,23 +260,11 @@ export default function ReservationEnsembleSelect() {
                                         onContextMenu={(e) => e.preventDefault()}
                                         style={{ touchAction: "none", userSelect: "none", WebkitUserSelect: "none" }}
                                         className={`
-                                            /* 1. 높이를 h-6(24px)으로 키워 시원하게 만듦 */
-                                            h-6 transition-all duration-75 border-l border-gray-800/60
-                                            
-                                            /* 2. 가로/세로 구분선: 선택되어도 미세하게 보이도록 색상 조정 */
-                                            ${isHour ? "border-t border-gray-600/50" : "border-t border-gray-800/30"}
-                                            ${t === "17:30" ? "border-b border-gray-600/50" : ""}
-                                            
-                                            /* 오른쪽 끝 경계선 처리 */
-                                            ${d === "토" ? "border-r border-gray-800/60" : ""}
-
-                                            /* 3. 상태별 색상 로직 */
-                                            ${!isLoggedIn 
-                                                ? "bg-gray-800/20 cursor-not-allowed" 
-                                                : selected 
-                                                    ? "bg-blue-500 border-t-blue-400/50 border-l-blue-400/50" // 선택 시 칸끼리 구분되도록 밝은 테두리 추가
-                                                    : "bg-[#0d1117] hover:bg-gray-700 cursor-pointer"
-                                            }
+                                            h-6 border-l border-gray-800/60
+                                            ${isHour ? "border-t border-gray-600/50" : "border-t border-gray-800/20"}
+                                            ${!isLoggedIn ? "bg-gray-800/20 cursor-not-allowed" 
+                                              : selected ? "bg-blue-500 border-blue-400" 
+                                              : "bg-[#0d1117] hover:bg-gray-700/50 cursor-pointer"}
                                         `}
                                     />
                                 );
