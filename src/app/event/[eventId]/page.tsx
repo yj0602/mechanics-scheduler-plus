@@ -20,6 +20,7 @@ type ConcertRow = {
   set_list: SetListItem[] | null;
   created_at: string;
   updated_at: string;
+  memo: string | null;
 };
 
 type SetListItemRow = {
@@ -55,23 +56,37 @@ export default async function EventDetailPage({
     let concertDetail: {
       concert: Concert;
       setList: SetListItem[];
-      memo: string;
     } | null = null;
 
     if (concert) {
-      const [{ data: setList }, { data: memoRow }] = await Promise.all([
-        supabaseServer
-          .from("set_list_items")
-          .select("*")
-          .eq("concert_id", eventId)
-          .order("order", { ascending: true })
-          .returns<SetListItemRow[]>(),
-        supabaseServer
-          .from("concert_memos")
-          .select("memo")
-          .eq("concert_id", eventId)
-          .maybeSingle<{ memo: string | null }>(),
-      ]);
+    // (선택) set_list_items 테이블을 실제로 쓸 거면 여기서 setList 받아서 쓰세요.
+    // 지금은 concert.set_list 쓰는 구조니까 아예 조회 안 해도 됩니다.
+    // const { data: setList } = await supabaseServer
+    //   .from("set_list_items")
+    //   .select("*")
+    //   .eq("concert_id", eventId)
+    //   .order("order", { ascending: true })
+    //   .returns<SetListItemRow[]>();
+
+    concertDetail = {
+      concert: {
+        id: concert.id,
+        title: concert.title,
+        date: concert.date,
+        start_time: concert.start_time.slice(0, 5),
+        end_time: concert.end_time.slice(0, 5),
+        rehearsal_start_time: concert.rehearsal_start_time?.slice(0, 5),
+        rehearsal_end_time: concert.rehearsal_end_time?.slice(0, 5),
+        location: concert.location ?? undefined,
+        set_list: concert.set_list || undefined,
+        created_at: concert.created_at,
+        updated_at: concert.updated_at,
+        memo: concert.memo, // ✅ 핵심: concerts.memo를 Concert에 포함
+      } satisfies Concert,
+
+      setList: concert.set_list ?? [],
+    };
+  }
 
   if(concert === null) {
       // Supabase 에러 확인이 필요할 수 있으므로 쿼리 부분에서 error도 같이 받아서 찍어보는 게 좋습니다.
@@ -86,27 +101,6 @@ export default async function EventDetailPage({
     notFound();
   }
 
-  // 5) ConcertInfoSection에 넘길 형태
-  concertDetail = {
-      concert: {
-        id: concert.id,
-        title: concert.title,
-        date: concert.date,
-        start_time: concert.start_time.slice(0, 5),
-        end_time: concert.end_time.slice(0, 5),
-        rehearsal_start_time: concert.rehearsal_start_time?.slice(0, 5),
-        rehearsal_end_time: concert.rehearsal_end_time?.slice(0, 5),
-        location: concert.location ?? undefined,
-        set_list: concert.set_list || undefined, // ✅ DB의 set_list 그대로 사용
-        created_at: concert.created_at,
-        updated_at: concert.updated_at,
-      } satisfies Concert,
-
-      setList: concert.set_list ?? [], // ✅ set_list 직접 전달
-      memo: memoRow?.memo ?? "",
-    };
-  }
-
   return (
     <main className="mx-auto max-w-3xl p-6">
       {ensemble ? (
@@ -115,7 +109,6 @@ export default async function EventDetailPage({
         <ConcertInfoSection
           concert={concertDetail!.concert}
           setList={concertDetail!.setList}
-          memo={concertDetail!.memo}
         />
       )}
       <BackToMainButton />

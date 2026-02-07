@@ -22,6 +22,7 @@ type ConcertRow = {
   updated_at: string;
   owner_id?: string;
   kind: string;
+  memo?: string;
 };
 
 // DB TIME 타입("HH:mm:ss")을 "HH:mm"으로 변환
@@ -42,6 +43,7 @@ const rowToConcert = (row: ConcertRow): Concert => ({
   set_list: row.set_list || undefined,
   created_at: row.created_at,
   updated_at: row.updated_at,
+  memo: row.memo,
 });
 
 const ensembleToReservation = (e: Ensemble): Reservation => ({

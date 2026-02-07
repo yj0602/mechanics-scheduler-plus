@@ -23,7 +23,6 @@ import {
 type Props = {
   concert: Concert;
   setList?: SetListItem[];
-  memo?: string;
 };
 
 // 셋리 수정 관련
@@ -52,7 +51,62 @@ const toDraft = (items?: SetListItem[]): SetListDraftItem[] => {
   }));
 };
 
-export default function ConcertInfoSection({ concert, setList, memo }: Props) {
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+const makeTimeOptions = (startHour = 0, endHour = 24) => {
+  const options: string[] = [];
+  for (let h = startHour; h < endHour; h++) {
+    options.push(`${pad2(h)}:00`);
+    options.push(`${pad2(h)}:30`);
+  }
+  // 24:00을 쓰고 싶으면 여기에서 options.push("24:00") 처리 가능
+  return options;
+};
+
+const TIME_OPTIONS = makeTimeOptions(0, 24);
+
+const compareTime = (a?: string | null, b?: string | null) => {
+  if (!a || !b) return 0;
+  // "HH:mm"
+  const [ah, am] = a.split(":").map(Number);
+  const [bh, bm] = b.split(":").map(Number);
+  return (ah * 60 + am) - (bh * 60 + bm);
+};
+
+const TimeSelect = ({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+}) => {
+  return (
+    <label className="flex flex-col gap-2">
+      <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-gray-200 outline-none focus:ring-2 focus:ring-[#58a6ff] disabled:opacity-50"
+      >
+        {TIME_OPTIONS.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+};
+
+
+export default function ConcertInfoSection({ concert, setList }: Props) {
   // ✅ concert.set_list를 우선 사용, props.setList는 fallback
   const actualSetList = concert.set_list ?? setList ?? [];
 
@@ -70,34 +124,46 @@ export default function ConcertInfoSection({ concert, setList, memo }: Props) {
 
   const [isEditing, setIsEditing] = useState(false);
 
-  const [rehearsalText, setRehearsalText] = useState(
-    concert.rehearsal_start_time && concert.rehearsal_end_time
-      ? `${concert.rehearsal_start_time} ~ ${concert.rehearsal_end_time} 리허설`
-      : "리허설 정보를 입력해주세요."
+  const [rehearsalStart, setRehearsalStart] = useState(
+    concert.rehearsal_start_time ?? "13:00"
+  );
+  const [rehearsalEnd, setRehearsalEnd] = useState(
+    concert.rehearsal_end_time ?? "16:00"
   );
 
-  const [performanceText, setPerformanceText] = useState(
-    `${concert.start_time} ~ ${concert.end_time} 본공연`
-  );
+  const [performanceStart, setPerformanceStart] = useState(concert.start_time ?? "18:00");
+  const [performanceEnd, setPerformanceEnd] = useState(concert.end_time ?? "21:00");
 
-  const [memoText, setMemoText] = useState(memo ?? "");
+  const [memoText, setMemoText] = useState(concert.memo ?? "");
 
   // ✅ actualSetList로 초기화
   const [draftSetList, setDraftSetList] = useState<SetListDraftItem[]>(() => toDraft(actualSetList));
 
   // 편집 중이 아닐 때만 props 변화 동기화
-  useEffect(() => {
-    if (!isEditing) {
-      setDraftSetList(toDraft(actualSetList)); // ✅ actualSetList 사용
-      setMemoText(memo ?? "");
-    }
-  }, [concert.set_list, setList, memo, isEditing]); // ✅ concert.set_list 의존성 추가
+useEffect(() => {
+  if (!isEditing) {
+    setDraftSetList(toDraft(actualSetList));
+    setMemoText(concert.memo ?? "");
 
-  const startEdit = () => {
-    setDraftSetList(toDraft(actualSetList)); // ✅ actualSetList 사용
-    setMemoText(memo ?? "");
+    setRehearsalStart(concert.rehearsal_start_time ?? "13:00");
+    setRehearsalEnd(concert.rehearsal_end_time ?? "16:00");
+    setPerformanceStart(concert.start_time ?? "18:00");
+    setPerformanceEnd(concert.end_time ?? "21:00");
+  }
+}, [concert.set_list, setList, concert.memo, isEditing, concert.rehearsal_start_time, concert.rehearsal_end_time, concert.start_time, concert.end_time]);
+
+const startEdit = () => {
+    setDraftSetList(toDraft(actualSetList));
+    setMemoText(concert.memo ?? "");
+
+    setRehearsalStart(concert.rehearsal_start_time ?? "13:00");
+    setRehearsalEnd(concert.rehearsal_end_time ?? "16:00");
+    setPerformanceStart(concert.start_time ?? "18:00");
+    setPerformanceEnd(concert.end_time ?? "21:00");
+
     setIsEditing(true);
   };
+
 
   const addSetRow = () => {
     setDraftSetList((prev) => [...prev, { id: uuidv4(), title: "", note: "" }]);
@@ -114,42 +180,51 @@ export default function ConcertInfoSection({ concert, setList, memo }: Props) {
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
-    setIsSaving(true);
+  setIsSaving(true);
 
-    try {
-      const validSetList = normalizeToSaved(draftSetList);
+  try {
+    const validSetList = normalizeToSaved(draftSetList);
 
-      const { error } = await supabase
-        .from("concerts")
-        .update({
-          set_list: validSetList.length > 0 ? validSetList : null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", concert.id);
+    const { error } = await supabase
+      .from("concerts")
+      .update({
+        rehearsal_start_time: rehearsalStart || null,
+        rehearsal_end_time: rehearsalEnd || null,
+        start_time: performanceStart,
+        end_time: performanceEnd,
+        memo: memoText, // ✅ 테이블에 memo 컬럼이 있을 때만
+        set_list: validSetList.length > 0 ? validSetList : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", concert.id);
 
-      if (error) {
-        console.error("Update error:", error);
-        alert("저장에 실패했습니다.");
-        return;
-      }
-
-      console.log("업데이트 성공!");
-      alert("저장되었습니다.");
-      
-      window.location.reload();
-      
-      setIsEditing(false);
-    } catch (err) {
-      console.error("Unexpected error:", err);
-      alert("저장 중 오류가 발생했습니다.");
-    } finally {
-      setIsSaving(false);
+    if (error) {
+      console.error("Update error:", error);
+      alert("저장에 실패했습니다.");
+      return;
     }
-  };
+
+    alert("저장되었습니다.");
+    window.location.reload();
+    setIsEditing(false);
+  } catch (err) {
+    console.error("Unexpected error:", err);
+    alert("저장 중 오류가 발생했습니다.");
+  } finally {
+    setIsSaving(false);
+  }
+};
+
 
   const handleCancel = () => {
-    setDraftSetList(toDraft(actualSetList)); // ✅ actualSetList 사용
-    setMemoText(memo ?? "");
+    setDraftSetList(toDraft(actualSetList));
+    setMemoText(concert.memo ?? "");
+
+    setRehearsalStart(concert.rehearsal_start_time ?? "13:00");
+    setRehearsalEnd(concert.rehearsal_end_time ?? "16:00");
+    setPerformanceStart(concert.start_time ?? "18:00");
+    setPerformanceEnd(concert.end_time ?? "21:00");
+
     setIsEditing(false);
   };
 
@@ -268,46 +343,95 @@ export default function ConcertInfoSection({ concert, setList, memo }: Props) {
           {/* 2. 중간 영역 (Time Table) */}
           <div className="bg-[#18181b] px-6 py-6 md:px-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
+
               {/* 리허설 정보 */}
-              <div className={`group relative rounded-2xl p-5 border flex flex-col h-[180px] transition-all duration-300 ${isEditing ? 'border-violet-500/50 bg-[#0a0a0a] shadow-[0_0_20px_rgba(139,92,246,0.1)]' : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+              <div
+                className={`group relative rounded-2xl p-5 border flex flex-col h-[180px] transition-all duration-300 ${
+                  isEditing
+                    ? "border-violet-500/50 bg-[#0a0a0a] shadow-[0_0_20px_rgba(139,92,246,0.1)]"
+                    : "border-white/5 bg-white/[0.02] hover:bg-white/[0.04]"
+                }`}
+              >
                 <div className="flex items-center gap-2 mb-3 shrink-0">
-                  <div className={`w-1.5 h-1.5 rounded-full ${isEditing ? 'bg-violet-500 animate-pulse' : 'bg-gray-600'}`} />
-                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Rehearsal</span>
+                  <div className={`w-1.5 h-1.5 rounded-full ${isEditing ? "bg-violet-500 animate-pulse" : "bg-gray-600"}`} />
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Rehearsal
+                  </span>
                 </div>
-                
+
                 {isEditing ? (
-                  <textarea
-                    value={rehearsalText}
-                    onChange={(e) => setRehearsalText(e.target.value)}
-                    className={`w-full flex-1 bg-transparent text-sm text-gray-200 outline-none resize-none placeholder:text-gray-700 font-mono leading-relaxed ${scrollbarStyle}`}
-                  />
+                  <div className="flex flex-col gap-4 flex-1">
+                    <TimeSelect
+                      label="리허설 시작"
+                      value={rehearsalStart}
+                      onChange={(v) => {
+                        setRehearsalStart(v);
+                        if (compareTime(v, rehearsalEnd) > 0) setRehearsalEnd(v);
+                      }}
+                      disabled={isSaving}
+                    />
+                    <TimeSelect
+                      label="리허설 종료"
+                      value={rehearsalEnd}
+                      onChange={(v) => {
+                        setRehearsalEnd(v);
+                        if (compareTime(rehearsalStart, v) > 0) setRehearsalStart(v);
+                      }}
+                      disabled={isSaving}
+                    />
+                  </div>
                 ) : (
                   <div className={`text-sm text-gray-400 whitespace-pre-wrap leading-relaxed flex-1 font-mono ${scrollbarStyle}`}>
-                    {rehearsalText}
+                    {concert.rehearsal_start_time && concert.rehearsal_end_time
+                      ? `${concert.rehearsal_start_time} ~ ${concert.rehearsal_end_time} 리허설`
+                      : "리허설 정보를 입력해주세요."}
                   </div>
                 )}
               </div>
 
               {/* 본 공연 정보 */}
-              <div className={`group relative rounded-2xl p-5 border flex flex-col h-[180px] transition-all duration-300 ${isEditing ? 'border-blue-500/50 bg-[#0a0a0a] shadow-[0_0_20px_rgba(59,130,246,0.1)]' : 'border-white/10 bg-gradient-to-br from-violet-500/5 to-blue-500/5'}`}>
+              <div
+                className={`group relative rounded-2xl p-5 border flex flex-col h-[180px] transition-all duration-300 ${
+                  isEditing
+                    ? "border-blue-500/50 bg-[#0a0a0a] shadow-[0_0_20px_rgba(59,130,246,0.1)]"
+                    : "border-white/10 bg-gradient-to-br from-violet-500/5 to-blue-500/5"
+                }`}
+              >
                 <div className="flex items-center gap-2 mb-3 shrink-0">
-                  <Clock size={12} className={isEditing ? 'text-blue-500' : 'text-blue-400'} />
-                  <span className={`text-[11px] font-bold uppercase tracking-wider ${isEditing ? 'text-blue-500' : 'text-blue-300'}`}>Performance</span>
+                  <Clock size={12} className={isEditing ? "text-blue-500" : "text-blue-400"} />
+                  <span className={`text-[11px] font-bold uppercase tracking-wider ${isEditing ? "text-blue-500" : "text-blue-300"}`}>
+                    Performance
+                  </span>
                 </div>
 
                 {isEditing ? (
-                   <textarea
-                   value={performanceText}
-                   onChange={(e) => setPerformanceText(e.target.value)}
-                   className={`w-full flex-1 bg-transparent text-sm text-gray-200 outline-none resize-none placeholder:text-gray-700 font-mono leading-relaxed ${scrollbarStyle}`}
-                 />
+                  <div className="flex flex-col gap-4 flex-1">
+                    <TimeSelect
+                      label="본공연 시작"
+                      value={performanceStart}
+                      onChange={(v) => {
+                        setPerformanceStart(v);
+                        if (compareTime(v, performanceEnd) > 0) setPerformanceEnd(v);
+                      }}
+                      disabled={isSaving}
+                    />
+                    <TimeSelect
+                      label="본공연 종료"
+                      value={performanceEnd}
+                      onChange={(v) => {
+                        setPerformanceEnd(v);
+                        if (compareTime(performanceStart, v) > 0) setPerformanceStart(v);
+                      }}
+                      disabled={isSaving}
+                    />
+                  </div>
                 ) : (
                   <div className={`text-sm text-white/90 whitespace-pre-wrap leading-relaxed font-medium flex-1 font-mono ${scrollbarStyle}`}>
-                    {performanceText}
+                    {`${concert.start_time} ~ ${concert.end_time} 본공연`}
                   </div>
                 )}
               </div>
+
             </div>
           </div>
 

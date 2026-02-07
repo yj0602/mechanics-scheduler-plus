@@ -16,6 +16,7 @@ export type Concert = {
     location?: string;
     created_at: string;
     updated_at: string;  
+    memo?: string | null;
 }
 
 export type SetListItem = {
@@ -34,5 +35,4 @@ export type SetList = {
 export type ConcertDetail = {
   concert: Concert;
   setList: SetListItem[];
-  memo?: string;
 };
