@@ -18,11 +18,6 @@ export type Concert = {
     updated_at: string;  
 }
 
-export type Team = {
-    id: string;
-    name: string;
-}
-
 export type SetListItem = {
     id: string;
     order: number; // 곡 순서
@@ -38,7 +33,6 @@ export type SetList = {
 // 공연 상세 페이지용 종합 타입
 export type ConcertDetail = {
   concert: Concert;
-  teams: Team[];
   setList: SetListItem[];
   memo?: string;
 };

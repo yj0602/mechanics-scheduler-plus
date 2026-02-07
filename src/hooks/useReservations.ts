@@ -2,12 +2,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/utils/supabase";
 import { Reservation } from "@/types";
 import { formatToDbDate } from "@/utils/date";
-import { mockEvents, mockConcert } from "@/mocks/events_mock"; 
+import { mockEvents } from "@/mocks/events_mock"; 
 import type { Ensemble } from "@/types/ensemble_detail";
 import type { Concert } from "@/types/concert_detail";
 import { getLocalConcerts, removeLocalConcert } from "@/mocks/local_concert_store"; // 로컬 테스트용
-
-
 const USE_MOCK = true;
 
 const mockUserName = "장혁재"; // 모달에 보여줄 임시 예약자
@@ -55,7 +53,7 @@ export const useReservations = (startDate: Date, endDate: Date) => {
             .filter((e) => e.date >= start && e.date <= end)
             .map(ensembleToReservation),
 
-          ...[...mockConcert, ...localConcerts]
+          ...[ ...localConcerts]
             .filter((c) => c.date >= start && c.date <= end)
             .map(concertToReservation),
         ];
@@ -85,7 +83,7 @@ export const useUpcomingReservations = () => {
 
         return [
           ...mockEvents.map(ensembleToReservation),
-          ...[...mockConcert, ...localConcerts].map(concertToReservation),
+          ...[ ...localConcerts].map(concertToReservation),
         ]
           .filter((x) => x.date >= today)
           .sort((a, b) => (a.date + a.start_time).localeCompare(b.date + b.start_time))
@@ -172,7 +170,7 @@ export const useAllUpcomingReservations = () => {
 
         return [
           ...mockEvents.map(ensembleToReservation),
-          ...[...mockConcert, ...localConcerts].map(concertToReservation),
+          ...[ ...localConcerts].map(concertToReservation),
         ]
           .filter((x) => x.date >= today)
           .sort((a, b) => (a.date + a.start_time).localeCompare(b.date + b.start_time))
