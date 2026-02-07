@@ -1,6 +1,7 @@
 // src/components/concert/concertInfoSection.tsx
 "use client";
 
+import { supabase } from "@/utils/supabase";
 import type { Concert, SetListItem } from "@/types/concert_detail";
 import { v4 as uuidv4 } from "uuid";
 import { useState, useEffect } from "react";
@@ -32,26 +33,30 @@ type SetListDraftItem = {
   note?: string;
 };
 
-const toDraft = (items?: SetListItem[]): SetListDraftItem[] => {
-  const base = items ?? [];
-  if (base.length === 0) return [{ id: uuidv4(), title: "", note: "" }];
-  return [...base]
-    .sort((a, b) => a.order - b.order)
-    .map((x) => ({ id: x.id, title: x.title, note: x.note ?? "" }));
-};
-
 const normalizeToSaved = (draft: SetListDraftItem[]): SetListItem[] => {
   const filtered = draft.filter((x) => x.title.trim() !== "");
   return filtered.map((x, idx) => ({
-    id: x.id || uuidv4(),
     order: idx + 1,
     title: x.title.trim(),
     note: (x.note ?? "").trim() || undefined,
   }));
 };
 
+const toDraft = (items?: SetListItem[]): SetListDraftItem[] => {
+  const base = items ?? [];
+  if (base.length === 0) return [{ id: uuidv4(), title: "", note: "" }];
+  return base.map((x) => ({ 
+    id: uuidv4(),
+    title: x.title, 
+    note: x.note ?? "" 
+  }));
+};
+
 export default function ConcertInfoSection({ concert, setList, memo }: Props) {
-    // 배경색 관련
+  // ✅ concert.set_list를 우선 사용, props.setList는 fallback
+  const actualSetList = concert.set_list ?? setList ?? [];
+
+  // 배경색 관련
   useEffect(() => {
     const originalStyle = window.getComputedStyle(document.body).backgroundColor;
     const originalColor = window.getComputedStyle(document.body).color;
@@ -77,19 +82,19 @@ export default function ConcertInfoSection({ concert, setList, memo }: Props) {
 
   const [memoText, setMemoText] = useState(memo ?? "");
 
-  // 셋리 편집용 draft state
-    const [draftSetList, setDraftSetList] = useState<SetListDraftItem[]>(() => toDraft(setList));
+  // ✅ actualSetList로 초기화
+  const [draftSetList, setDraftSetList] = useState<SetListDraftItem[]>(() => toDraft(actualSetList));
 
-    // 편집 중이 아닐 때만 props 변화 동기화
-    useEffect(() => {
-      if (!isEditing) {
-        setDraftSetList(toDraft(setList));
-        setMemoText(memo ?? "");
-      }
-    }, [setList, memo, isEditing]);
+  // 편집 중이 아닐 때만 props 변화 동기화
+  useEffect(() => {
+    if (!isEditing) {
+      setDraftSetList(toDraft(actualSetList)); // ✅ actualSetList 사용
+      setMemoText(memo ?? "");
+    }
+  }, [concert.set_list, setList, memo, isEditing]); // ✅ concert.set_list 의존성 추가
 
   const startEdit = () => {
-    setDraftSetList(toDraft(setList)); // 스냅샷
+    setDraftSetList(toDraft(actualSetList)); // ✅ actualSetList 사용
     setMemoText(memo ?? "");
     setIsEditing(true);
   };
@@ -106,23 +111,44 @@ export default function ConcertInfoSection({ concert, setList, memo }: Props) {
     setDraftSetList((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
   };
 
-  const handleSave = () => {
-    const payload = {
-      concertId: concert.id,
-      rehearsal_text_local: rehearsalText,
-      performance_text_local: performanceText,
-      memo: memoText,
-      setList: normalizeToSaved(draftSetList),
-    };
+  const [isSaving, setIsSaving] = useState(false);
 
-     // ✅ 지금은 셋리 저장 로직 없이 콘솔만
-    console.log("UPDATE API 호출(임시):", payload);
+  const handleSave = async () => {
+    setIsSaving(true);
 
-    setIsEditing(false);
+    try {
+      const validSetList = normalizeToSaved(draftSetList);
+
+      const { error } = await supabase
+        .from("concerts")
+        .update({
+          set_list: validSetList.length > 0 ? validSetList : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", concert.id);
+
+      if (error) {
+        console.error("Update error:", error);
+        alert("저장에 실패했습니다.");
+        return;
+      }
+
+      console.log("업데이트 성공!");
+      alert("저장되었습니다.");
+      
+      window.location.reload();
+      
+      setIsEditing(false);
+    } catch (err) {
+      console.error("Unexpected error:", err);
+      alert("저장 중 오류가 발생했습니다.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
-    setDraftSetList(toDraft(setList));
+    setDraftSetList(toDraft(actualSetList)); // ✅ actualSetList 사용
     setMemoText(memo ?? "");
     setIsEditing(false);
   };
@@ -135,8 +161,10 @@ export default function ConcertInfoSection({ concert, setList, memo }: Props) {
     "[&::-webkit-scrollbar-thumb]:rounded-full " +
     "hover:[&::-webkit-scrollbar-thumb]:bg-gray-400";
     
-    // props setList mutate 방지: sort는 복사본으로
-    const sortedSetList = setList && setList.length > 0 ? [...setList].sort((a, b) => a.order - b.order) : [];
+  // ✅ actualSetList로 정렬
+  const sortedSetList = actualSetList.length > 0 
+    ? [...actualSetList].sort((a, b) => a.order - b.order) 
+    : [];
 
   return (
     <section className="bg-[#050505] text-gray-200 min-h-screen p-4 md:p-8 flex flex-col items-center relative overflow-hidden">
@@ -154,12 +182,12 @@ export default function ConcertInfoSection({ concert, setList, memo }: Props) {
           </span>
         </div>
         <div className="flex items-center gap-3">
-            <button className="flex items-center gap-1.5 rounded-full border border-gray-700 bg-[#1a1a1a] px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
-              <LogOut size={14} />
-              <span>로그아웃</span>
-            </button>
-            <div className="h-9 w-9 rounded-full bg-gray-700 border border-gray-600" />
-          </div>
+          <button className="flex items-center gap-1.5 rounded-full border border-gray-700 bg-[#1a1a1a] px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+            <LogOut size={14} />
+            <span>로그아웃</span>
+          </button>
+          <div className="h-9 w-9 rounded-full bg-gray-700 border border-gray-600" />
+        </div>
       </header>
 
       {/* 메인 티켓 UI */}
@@ -181,12 +209,20 @@ export default function ConcertInfoSection({ concert, setList, memo }: Props) {
             <div className="absolute top-6 right-6 z-20">
               {isEditing ? (
                 <div className="flex gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
-                  <button onClick={handleCancel} className="p-2.5 rounded-full bg-gray-800 hover:bg-red-900/30 text-gray-400 hover:text-red-400 transition-colors border border-white/5">
+                  <button 
+                    onClick={handleCancel} 
+                    disabled={isSaving}
+                    className="p-2.5 rounded-full bg-gray-800 hover:bg-red-900/30 text-gray-400 hover:text-red-400 transition-colors border border-white/5 disabled:opacity-50"
+                  >
                     <X size={16} />
                   </button>
-                  <button onClick={handleSave} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white text-black hover:bg-gray-200 text-xs font-bold transition-all shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+                  <button 
+                    onClick={handleSave} 
+                    disabled={isSaving}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white text-black hover:bg-gray-200 text-xs font-bold transition-all shadow-[0_0_15px_rgba(255,255,255,0.3)] disabled:opacity-50"
+                  >
                     <Save size={14} />
-                    저장
+                    {isSaving ? "저장 중..." : "저장"}
                   </button>
                 </div>
               ) : (
@@ -348,8 +384,8 @@ export default function ConcertInfoSection({ concert, setList, memo }: Props) {
                   ) : (
                     <ul className="space-y-3">
                       {sortedSetList.length > 0 ? (
-                        sortedSetList.map((item) => (
-                          <li key={item.id} className="flex items-start gap-3 group">
+                        sortedSetList.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-3 group">
                             <span className="text-[10px] font-mono text-gray-600 mt-1 group-hover:text-violet-400 transition-colors">
                               {String(item.order).padStart(2, "0")}
                             </span>

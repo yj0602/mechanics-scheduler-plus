@@ -3,7 +3,7 @@ import { supabase } from "@/utils/supabase";
 import { Reservation } from "@/types";
 import { formatToDbDate } from "@/utils/date";
 import type { Ensemble } from "@/types/ensemble_detail";
-import type { Concert } from "@/types/concert_detail";
+import type { Concert, SetListItem } from "@/types/concert_detail";
 
 const mockUserName = "장혁재";
 
@@ -17,6 +17,7 @@ type ConcertRow = {
   rehearsal_start_time?: string;
   rehearsal_end_time?: string;
   location?: string;
+  set_list?: SetListItem[] | null;
   created_at: string;
   updated_at: string;
   owner_id?: string;
@@ -38,6 +39,7 @@ const rowToConcert = (row: ConcertRow): Concert => ({
   rehearsal_start_time: row.rehearsal_start_time ? formatTime(row.rehearsal_start_time) : undefined,
   rehearsal_end_time: row.rehearsal_end_time ? formatTime(row.rehearsal_end_time) : undefined,
   location: row.location,
+  set_list: row.set_list || undefined,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });

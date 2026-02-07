@@ -12,14 +12,14 @@ export type Concert = {
 
     rehearsal_start_time?: string; // 'HH:mm' 형식
     rehearsal_end_time?: string; // 'HH:mm' 형식
-
+    set_list?: SetListItem[];
     location?: string;
     created_at: string;
     updated_at: string;  
 }
 
 export type SetListItem = {
-    id: string;
+    // id: string; // JSON 저장 시 불필요
     order: number; // 곡 순서
     title: string; // 곡 제목
     note?: string; // 선택: 튜닝, 특이사항 등
