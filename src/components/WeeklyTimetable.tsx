@@ -73,13 +73,14 @@ export default function WeeklyTimetable({
     });
   };
 
-  const handleEmptySlotClick = (day: Date, hour: number, minute: number) => {
-    const timeStr = `${String(hour).padStart(2, "0")}:${
-      minute === 0 ? "00" : "30"
-    }`;
-    setSelectedSlot({ date: day, time: timeStr });
-    setIsCreateModalOpen(true);
-  };
+  // 빈 슬롯 클릭 시 기존 예약 모달 표시 함수
+  // const handleEmptySlotClick = (day: Date, hour: number, minute: number) => {
+  //   const timeStr = `${String(hour).padStart(2, "0")}:${
+  //     minute === 0 ? "00" : "30"
+  //   }`;
+  //   setSelectedSlot({ date: day, time: timeStr });
+  //   setIsCreateModalOpen(true);
+  // };
 
   return (
     <div className="flex flex-col h-full bg-[#1E1E1E] text-gray-200 rounded-xl shadow-lg border border-gray-800 overflow-hidden relative">
@@ -190,14 +191,15 @@ export default function WeeklyTimetable({
                         className="h-7 md:h-10 border-b border-gray-800 border-dashed border-gray-800/50 flex"
                       >
                         <button
-                          className="flex-1 hover:bg-gray-800/50 transition-colors relative group w-full text-left"
-                          onClick={() =>
-                            handleEmptySlotClick(day, time, minute)
-                          }
+                          // 기존 빈 슬롯 hover 전부 주석처리 해둠
+                          // className="flex-1 hover:bg-gray-800/50 transition-colors relative group w-full text-left"
+                          // onClick={() =>
+                          //   handleEmptySlotClick(day, time, minute)
+                          // }
                         >
-                          <span className="hidden group-hover:block absolute top-0.5 left-0.5 text-blue-400 text-[10px] font-bold">
+                          {/* <span className="hidden group-hover:block absolute top-0.5 left-0.5 text-blue-400 text-[10px] font-bold">
                             +
-                          </span>
+                          </span> */}
                         </button>
                       </div>
                     );
@@ -250,8 +252,7 @@ export default function WeeklyTimetable({
           ))}
         </div>
       </div>
-
-      {selectedSlot && (
+      {/* {selectedSlot && (
         <ReservationModal
           isOpen={isCreateModalOpen}
           onClose={() => setIsCreateModalOpen(false)}
@@ -260,7 +261,7 @@ export default function WeeklyTimetable({
           // React Query Mutation이 성공하면 자동으로 리렌더링되므로 onSuccess는 비워둬도 됨 (Modal 닫기만 처리)
           onSuccess={() => setIsCreateModalOpen(false)}
         />
-      )}
+      )} */}
     </div>
   );
 }

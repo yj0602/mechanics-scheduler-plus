@@ -8,6 +8,7 @@ import { timeToMinutes } from "@/utils/date";
 import { useQueryClient } from "@tanstack/react-query";
 import { addLocalConcert } from "@/mocks/local_concert_store";
 import type { Concert } from "@/types/concert_detail";
+import { v4 as uuidv4 } from "uuid";
 
 import { Clock, Check, Plus, Trash2, MapPin, Music, LogOut } from "lucide-react";
 import {
@@ -42,7 +43,7 @@ export default function ConcertCreate() {
   const [endTime, setEndTime] = useState("");
 
   const [setList, setSetList] = useState<SetListDraftItem[]>([
-    { id: crypto.randomUUID(), title: "", note: "" },
+    { id: uuidv4(), title: "", note: "" },
   ]);
 
   useEffect(() => {
@@ -81,7 +82,7 @@ export default function ConcertCreate() {
   };
 
   const addSetListRow = () => {
-    setSetList((prev) => [...prev, { id: crypto.randomUUID(), title: "", note: "" }]);
+    setSetList((prev) => [...prev, { id: uuidv4(), title: "", note: "" }]);
   };
 
   const removeSetListRow = (id: string) => {
@@ -99,7 +100,7 @@ export default function ConcertCreate() {
     const now = new Date().toISOString();
 
     const newConcert: Concert = {
-      id: `concert_${crypto.randomUUID()}`,
+      id: `concert_${uuidv4()}`,
       title: concertTitle.trim(),
       date: selectedDate!, // canSubmit이 보장
       start_time: startTime,
@@ -120,7 +121,7 @@ export default function ConcertCreate() {
     // setSelectedDate(null);
     // setStartTime("");
     // setEndTime("");
-    // setSetList([{ id: crypto.randomUUID(), title: "", note: "" }]);
+    // setSetList([{ id: uuidv4(), title: "", note: "" }]);
 
     router.push("/");
   };

@@ -24,6 +24,13 @@ export const addLocalConcert = (concert: Concert) => {
   localStorage.setItem(KEY, JSON.stringify([concert, ...prev]));
 };
 
+export const updateLocalConcert = (id: string, patch: Partial<Concert>) => {
+  if (typeof window === "undefined") return;
+  const prev = getLocalConcerts();
+  const next = prev.map((c) => (c.id === id ? { ...c, ...patch } : c));
+  localStorage.setItem(KEY, JSON.stringify(next));
+};
+
 export const removeLocalConcert = (id: string) => {
   if (typeof window === "undefined") return;
   const prev = getLocalConcerts();
