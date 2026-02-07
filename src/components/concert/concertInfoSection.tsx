@@ -2,6 +2,7 @@
 "use client";
 
 import type { Concert, SetListItem } from "@/types/concert_detail";
+import { v4 as uuidv4 } from "uuid";
 import { useState, useEffect } from "react";
 import {
   Calendar,
@@ -14,12 +15,39 @@ import {
   AlignLeft,
   Clock,
   Ticket,
+  Plus,
+  Trash2,
 } from "lucide-react";
 
 type Props = {
   concert: Concert;
   setList?: SetListItem[];
   memo?: string;
+};
+
+// 셋리 수정 관련
+type SetListDraftItem = {
+  id: string;
+  title: string;
+  note?: string;
+};
+
+const toDraft = (items?: SetListItem[]): SetListDraftItem[] => {
+  const base = items ?? [];
+  if (base.length === 0) return [{ id: uuidv4(), title: "", note: "" }];
+  return [...base]
+    .sort((a, b) => a.order - b.order)
+    .map((x) => ({ id: x.id, title: x.title, note: x.note ?? "" }));
+};
+
+const normalizeToSaved = (draft: SetListDraftItem[]): SetListItem[] => {
+  const filtered = draft.filter((x) => x.title.trim() !== "");
+  return filtered.map((x, idx) => ({
+    id: x.id || uuidv4(),
+    order: idx + 1,
+    title: x.title.trim(),
+    note: (x.note ?? "").trim() || undefined,
+  }));
 };
 
 export default function ConcertInfoSection({ concert, setList, memo }: Props) {
@@ -49,17 +77,53 @@ export default function ConcertInfoSection({ concert, setList, memo }: Props) {
 
   const [memoText, setMemoText] = useState(memo ?? "");
 
+  // 셋리 편집용 draft state
+    const [draftSetList, setDraftSetList] = useState<SetListDraftItem[]>(() => toDraft(setList));
+
+    // 편집 중이 아닐 때만 props 변화 동기화
+    useEffect(() => {
+      if (!isEditing) {
+        setDraftSetList(toDraft(setList));
+        setMemoText(memo ?? "");
+      }
+    }, [setList, memo, isEditing]);
+
+  const startEdit = () => {
+    setDraftSetList(toDraft(setList)); // 스냅샷
+    setMemoText(memo ?? "");
+    setIsEditing(true);
+  };
+
+  const addSetRow = () => {
+    setDraftSetList((prev) => [...prev, { id: uuidv4(), title: "", note: "" }]);
+  };
+
+  const removeSetRow = (id: string) => {
+    setDraftSetList((prev) => (prev.length === 1 ? prev : prev.filter((x) => x.id !== id)));
+  };
+
+  const updateSetRow = (id: string, patch: Partial<SetListDraftItem>) => {
+    setDraftSetList((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  };
+
   const handleSave = () => {
-    console.log("UPDATE API 호출:", {
+    const payload = {
       concertId: concert.id,
       rehearsal_text_local: rehearsalText,
       performance_text_local: performanceText,
       memo: memoText,
-    });
+      setList: normalizeToSaved(draftSetList),
+    };
+
+     // ✅ 지금은 셋리 저장 로직 없이 콘솔만
+    console.log("UPDATE API 호출(임시):", payload);
+
     setIsEditing(false);
   };
 
   const handleCancel = () => {
+    setDraftSetList(toDraft(setList));
+    setMemoText(memo ?? "");
     setIsEditing(false);
   };
 
@@ -70,6 +134,9 @@ export default function ConcertInfoSection({ concert, setList, memo }: Props) {
     "[&::-webkit-scrollbar-thumb]:bg-gray-600 " +
     "[&::-webkit-scrollbar-thumb]:rounded-full " +
     "hover:[&::-webkit-scrollbar-thumb]:bg-gray-400";
+    
+    // props setList mutate 방지: sort는 복사본으로
+    const sortedSetList = setList && setList.length > 0 ? [...setList].sort((a, b) => a.order - b.order) : [];
 
   return (
     <section className="bg-[#050505] text-gray-200 min-h-screen p-4 md:p-8 flex flex-col items-center relative overflow-hidden">
@@ -124,7 +191,7 @@ export default function ConcertInfoSection({ concert, setList, memo }: Props) {
                 </div>
               ) : (
                 <button 
-                  onClick={() => setIsEditing(true)} 
+                  onClick={startEdit} 
                   className="group p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border border-white/5 transition-all"
                 >
                   <Edit3 size={16} className="group-hover:scale-110 transition-transform" />
@@ -221,29 +288,85 @@ export default function ConcertInfoSection({ concert, setList, memo }: Props) {
               
               {/* Set List */}
               <div className="border-l border-white/10 pl-5 h-[170px] flex flex-col">
-                <div className="flex items-center gap-2 mb-4 shrink-0">
-                  <Music size={14} className="text-gray-500" />
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Set List</h3>
-                </div>
-                <ul className={`space-y-3 flex-1 ${scrollbarStyle} pr-2`}>
-                  {setList && setList.length > 0 ? (
-                    setList
-                      .sort((a, b) => a.order - b.order)
-                      .map((item: SetListItem) => (
-                      <li key={item.id} className="flex items-start gap-3 group">
-                        <span className="text-[10px] font-mono text-gray-600 mt-1 group-hover:text-violet-400 transition-colors">
-                          {String(item.order).padStart(2, '0')}
-                        </span>
-                        <div className="flex flex-col">
-                          <span className="text-sm text-gray-300 font-medium group-hover:text-white transition-colors">{item.title}</span>
-                          {item.note && <span className="text-[11px] text-gray-600 italic mt-0.5">{item.note}</span>}
-                        </div>
-                      </li>
-                    ))
-                  ) : (
-                    <li className="text-xs text-gray-600 italic">등록된 셋리스트가 없습니다.</li>
+                <div className="flex items-center justify-between mb-4 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <Music size={14} className="text-gray-500" />
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Set List</h3>
+                  </div>
+
+                  {isEditing && (
+                    <button
+                      type="button"
+                      onClick={addSetRow}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 bg-white/5 text-[11px] text-gray-300 hover:bg-white/10 hover:text-white transition"
+                    >
+                      <Plus className="w-4 h-4" />
+                      곡 추가
+                    </button>
                   )}
-                </ul>
+                </div>
+
+                <div className={`flex-1 ${scrollbarStyle} pr-2`}>
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      {draftSetList.map((item, idx) => (
+                        <div key={item.id} className="flex items-start gap-2">
+                          <span className="text-[10px] font-mono text-gray-600 mt-2 w-6">
+                            {String(idx + 1).padStart(2, "0")}
+                          </span>
+
+                          <div className="flex-1 space-y-2">
+                            <input
+                              value={item.title}
+                              onChange={(e) => updateSetRow(item.id, { title: e.target.value })}
+                              placeholder="곡 제목"
+                              className="w-full p-2.5 rounded-xl border border-white/10 bg-[#0a0a0a] text-sm text-gray-200 outline-none focus:ring-2 focus:ring-[#58a6ff]"
+                            />
+                            <input
+                              value={item.note ?? ""}
+                              onChange={(e) => updateSetRow(item.id, { note: e.target.value })}
+                              placeholder="메모 (선택)"
+                              className="w-full p-2.5 rounded-xl border border-white/10 bg-[#0a0a0a] text-[12px] text-gray-300 outline-none focus:ring-2 focus:ring-[#58a6ff]"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => removeSetRow(item.id)}
+                            className="mt-1 p-2 rounded-lg bg-white/5 hover:bg-red-900/30 text-gray-400 hover:text-red-400 border border-white/10 transition"
+                            aria-label="곡 삭제"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+
+                      <p className="text-[11px] text-gray-500">
+                        * 곡 제목이 비어있는 항목은 저장 시 자동으로 제외됩니다.
+                      </p>
+                    </div>
+                  ) : (
+                    <ul className="space-y-3">
+                      {sortedSetList.length > 0 ? (
+                        sortedSetList.map((item) => (
+                          <li key={item.id} className="flex items-start gap-3 group">
+                            <span className="text-[10px] font-mono text-gray-600 mt-1 group-hover:text-violet-400 transition-colors">
+                              {String(item.order).padStart(2, "0")}
+                            </span>
+                            <div className="flex flex-col">
+                              <span className="text-sm text-gray-300 font-medium group-hover:text-white transition-colors">
+                                {item.title}
+                              </span>
+                              {item.note && <span className="text-[11px] text-gray-600 italic mt-0.5">{item.note}</span>}
+                            </div>
+                          </li>
+                        ))
+                      ) : (
+                        <li className="text-xs text-gray-600 italic">등록된 셋리스트가 없습니다.</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
               </div>
 
               {/* Memo */}
