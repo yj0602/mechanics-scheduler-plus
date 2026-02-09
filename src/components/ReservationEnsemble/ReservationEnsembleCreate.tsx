@@ -15,6 +15,7 @@ import {
   isSameMonth,
   format
 } from "date-fns";
+import { supabase } from "@/utils/supabase";
 
 export default function ReservationEnsembleCreate() {
   const router = useRouter();
@@ -112,19 +113,33 @@ export default function ReservationEnsembleCreate() {
     endTime !== "" &&
     timeToMinutes(startTime) < timeToMinutes(endTime);
 
-  const handleCreateEnsemble = () => {
+  const handleCreateEnsemble = async() => {
+    // DB 컬럼명에 맞춘 데이터 구성
     const payload = {
       title: ensembleTitle,
-      location,
-      dates: Array.from(selectedDates).sort(),
-      startTime,
-      endTime,
+      location: location,
+      target_dates: Array.from(selectedDates).sort(),
+      start_time_limit: startTime, // DB의 start_time_limit 컬럼
+      end_time_limit: endTime,     // DB의 end_time_limit 컬럼
     };
-    // 로컬 스토리지에 저장
-    localStorage.setItem("ensembleDraft", JSON.stringify(payload));
-    
-    // Page 2로 이동
-    router.push(`/ensemble/select`);
+    try {
+      // Supabase에 데이터 삽입
+      const { data, error } = await supabase
+        .from('ensemble_rooms') // 아까 SQL로 만든 테이블 이름
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // 생성된 방의 id를 가지고 Page 2로 이동
+      // 예: /ensemble/select?id=abcd-1234-...
+      router.push(`/ensemble/select?id=${data.id}`);
+      
+    } catch (error) {
+      console.error("방 생성 실패:", error);
+      alert("서버 저장에 실패했습니다. 다시 시도해주세요.");
+    }
   };
   // 취소 버튼 함수 추가
   const handleCancel = () => {

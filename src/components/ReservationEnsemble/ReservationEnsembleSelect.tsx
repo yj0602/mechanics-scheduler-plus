@@ -5,12 +5,19 @@ import { Check, User } from "lucide-react";
 import { timeToMinutes } from "@/utils/date";
 import { Fragment } from "react"
 import { useRouter } from "next/navigation";
+import { supabase } from "@/utils/supabase";
 
 export default function ReservationEnsembleSelect() {
     const router = useRouter();
     const [userName, setUserName] = useState("");
     const [isLoggedIn, setIsLoggedIn] = useState(false);
-    const [ensembleData, setEnsembleData] = useState<any>(null);
+    const [ensembleData, setEnsembleData] = useState<{
+        id: string;
+        title: string;
+        dates: string[];
+        startTime: string;
+        endTime: string;
+    } | null>(null);
 
     const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
     const [isAddingSession, setIsAddingSession] = useState(false);
@@ -29,19 +36,48 @@ export default function ReservationEnsembleSelect() {
     ]);
     const [showShareGuide, setShowShareGuide] = useState(false);
 
-    // Page1 데이터 불러오기 (Hydration 에러 방지를 위해 useEffect 사용)
     useEffect(() => {
-        // 1. 방 정보 불러오기
-        const savedDraft = localStorage.getItem("ensembleDraft");
-        if (savedDraft) setEnsembleData(JSON.parse(savedDraft));
+        // 방 정보 불러오기 (DB)
+        const fetchInitialData = async () => {
+            const searchParams = new URLSearchParams(window.location.search);
+            const roomId = searchParams.get("id");
 
-        // 2. 기존 로그인 유저가 있는지 확인
+            if (!roomId) return;
+
+            try {
+            const { data, error } = await supabase
+                .from("ensemble_rooms")
+                .select("*")
+                .eq("id", roomId)
+                .single();
+
+            if (error) throw error;
+
+            if (data) {
+                // 단 한 번의 업데이트로 합침
+                setEnsembleData({
+                id: data.id,
+                title: data.title,
+                dates: data.target_dates,
+                startTime: data.start_time_limit,
+                endTime: data.end_time_limit,
+                });
+            }
+            } catch (err) {
+            console.error("데이터 로딩 실패:", err);
+            }
+        };
+
+        // 로그인 정보 불러오기 (Local)
         const savedUser = localStorage.getItem("ensembleUser");
         if (savedUser) {
             setUserName(savedUser);
             setIsLoggedIn(true);
         }
-    }, []);
+
+        fetchInitialData();
+    }, []); // 마운트 시 한 번만 실행
+
     // 드래그 이벤트
     useEffect(() => {
         if (!isDragging) return;
@@ -214,48 +250,62 @@ export default function ReservationEnsembleSelect() {
     if (!ensembleData) {
         return <div className="min-h-screen bg-[#0d1117] flex items-center justify-center text-gray-500">정보를 불러오는 중...</div>;
     }
-    // 하단 확정 버튼 클릭 시 실행될 함수
-    const handleConfirmSelection = () => {
-        if (!isLoggedIn || selectedSessions.size === 0 || selectedCells.size === 0) return;
+    const handleConfirmSelection = async () => {
+        // 유효성 검사
+        if (!isLoggedIn || selectedSessions.size === 0 || selectedCells.size === 0) {
+            alert("이름, 세션, 시간을 모두 선택해주세요!");
+            return;
+        }
 
-        // 날짜 형식 표준화
-        // 현재 selectedCells에 저장된 "2/5-13:00" 포맷을 
-        // ensembleData.dates에 있는 실제 연도 정보를 포함한 포맷으로 매핑합니다.
+        const searchParams = new URLSearchParams(window.location.search);
+        const roomId = searchParams.get("id");
+        if (!roomId) return;
+
+        // 2. 날짜 형식 표준화 (이 부분은 순수하게 변환만 합니다)
         const standardizedSlots = Array.from(selectedCells).map(cellKey => {
-            const [displayDate, time] = cellKey.split("-"); // "2/5", "13:00" 분리
-            
-            // ensembleData.dates에서 해당 월/일과 일치하는 전체 날짜(YYYY-MM-DD)를 찾음
+            const [displayDate, time] = cellKey.split("-");
             const fullDate = ensembleData.dates.find((d: string) => {
                 const [,, day] = d.split("-");
                 const displayDay = displayDate.split("/")[1];
                 return parseInt(day) === parseInt(displayDay);
             });
-
-            return `${fullDate} ${time}`; // 최종: "2026-02-05 13:00"
+            return `${fullDate} ${time}`;
         });
 
-        // 데이터 객체 구성 및 중복 방지 저장
-        const userSelection = {
-            userName: userName.trim(), // ensembleUser와 일치하는 값
-            sessions: Array.from(selectedSessions),
-            availableSlots: standardizedSlots, // 표준화된 배열 저장
-            updatedAt: new Date().toISOString(),
-        };
+        //  DB 저장 (map 밖에서 딱 한 번만 실행)
+        try {
+            const { error } = await supabase
+                .from("ensemble_availability")
+                .insert([{
+                    room_id: roomId,
+                    user_name: userName.trim(),
+                    selected_sessions: Array.from(selectedSessions), // 세션 배열
+                    available_slots: standardizedSlots,              // 시간 배열
+                }]);
 
-        // 로컬 스토리지에 저장 
-        // 나중에는 여러 명의 응답을 배열로 관리해야 하므로 'responses' 키를 사용
-        const existingResponses = JSON.parse(localStorage.getItem("ensembleResponses") || "[]");
-        
-        // 중복 방지: 동일한 이름의 기존 데이터가 있다면 지우고 새로 넣음
-        const updatedResponses = [
-            ...existingResponses.filter((r: any) => r.userName !== userSelection.userName),
-            userSelection
-        ];
+            if (error) throw error;
 
-        localStorage.setItem("ensembleResponses", JSON.stringify(updatedResponses));
-        
-        // 저장 후  Page 3(결과 페이지)로 이동
-        router.push("/ensemble/result");
+            // 로컬 스토리지 업데이트 (백업용 - 필요 없으면 빼도 됨)
+            const userSelection = {
+                userName: userName.trim(),
+                sessions: Array.from(selectedSessions),
+                availableSlots: standardizedSlots,
+                updatedAt: new Date().toISOString(),
+            };
+            const existingResponses = JSON.parse(localStorage.getItem("ensembleResponses") || "[]");
+            const updatedResponses = [
+                ...existingResponses.filter((r: any) => r.userName !== userSelection.userName),
+                userSelection
+            ];
+            localStorage.setItem("ensembleResponses", JSON.stringify(updatedResponses));
+
+            // 성공 시 결과 페이지로 이동
+            router.push(`/ensemble/result?id=${roomId}`);
+            
+        } catch (err) {
+            console.error("데이터 저장 실패:", err);
+            alert("일정 제출에 실패했습니다. 다시 시도해주세요.");
+        }
     };
 
 
