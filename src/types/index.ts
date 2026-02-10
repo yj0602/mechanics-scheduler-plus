@@ -1,4 +1,5 @@
 // src/types/index.ts
+import { Participant } from "./ensemble_detail";
 
 export interface Reservation {
   id: string;
@@ -9,6 +10,8 @@ export interface Reservation {
   end_time: string; // 'HH:mm' 형식
   kind?: "ensemble" | "concert";
   created_at: string;
+  participants?: Participant[]; 
+  room_id?: string;
 }
 
 // 캘린더 등에서 사용할 날짜 관련 타입

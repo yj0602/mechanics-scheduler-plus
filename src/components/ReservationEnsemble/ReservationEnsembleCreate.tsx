@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useMemo, useEffect } from 'react';
 import { timeToMinutes } from "@/utils/date";
 import { Clock, Check, MapPin} from "lucide-react";
@@ -19,6 +19,8 @@ import { supabase } from "@/utils/supabase";
 
 export default function ReservationEnsembleCreate() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const roomId = searchParams.get("id");
   const [ensembleTitle, setEnsembleTitle] = useState("");
 
   const [currentMonth, setCurrentMonth] = useState<Date | null>(null);
@@ -31,10 +33,33 @@ export default function ReservationEnsembleCreate() {
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("");
 
-  // hydration 에러->첫 렌더를 동일하게
   useEffect(() => {
-    setCurrentMonth(new Date());
-  }, []);
+    if (!roomId) return;
+
+    const fetchRoomData = async () => {
+      const { data, error } = await supabase
+        .from("ensemble_rooms")
+        .select("*")
+        .eq("id", roomId)
+        .single();
+
+      if (data && !error) {
+        setEnsembleTitle(data.title);
+        setLocation(data.location || "");
+        setSelectedDates(new Set(data.target_dates)); // 기존 날짜 복구
+        setStartTime(data.start_time_limit);
+        setEndTime(data.end_time_limit);
+        
+        // 달력 월(Month) 위치 조정 (선택된 첫 날짜 기준)
+        if (data.target_dates.length > 0) {
+          const firstDate = new Date(data.target_dates[0]);
+          setCurrentMonth(firstDate);
+        }
+      }
+    };
+
+    fetchRoomData();
+  }, [roomId]);
 
   // 1. 드래그 시작
   const handlePointerDown = (dateStr: string, e: React.PointerEvent) => {
@@ -121,21 +146,27 @@ export default function ReservationEnsembleCreate() {
       target_dates: Array.from(selectedDates).sort(),
       start_time_limit: startTime, // DB의 start_time_limit 컬럼
       end_time_limit: endTime,     // DB의 end_time_limit 컬럼
+      updated_at: new Date().toISOString(), // 업데이트 시간 기록
     };
     try {
-      // Supabase에 데이터 삽입
-      const { data, error } = await supabase
-        .from('ensemble_rooms') // 아까 SQL로 만든 테이블 이름
-        .insert([payload])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // 생성된 방의 id를 가지고 Page 2로 이동
-      // 예: /ensemble/select?id=abcd-1234-...
-      router.push(`/ensemble/select?id=${data.id}`);
-      
+      if (roomId) {
+        // 수정 모드: 제목과 장소만 업데이트됨 (날짜/시간은 UI에서 막았으므로 기존값 유지)
+        const { error } = await supabase
+          .from('ensemble_rooms')
+          .update(payload)
+          .eq('id', roomId);
+        if (error) throw error;
+        router.push(`/ensembleCreate/select?id=${roomId}`);
+      } else {
+        // 생성 모드: 기존 insert 로직
+        const { data, error } = await supabase
+          .from('ensemble_rooms')
+          .insert([payload])
+          .select()
+          .single();
+        if (error) throw error;
+        router.push(`/ensembleCreate/select?id=${data.id}`);
+      }
     } catch (error) {
       console.error("방 생성 실패:", error);
       alert("서버 저장에 실패했습니다. 다시 시도해주세요.");
@@ -249,9 +280,11 @@ export default function ReservationEnsembleCreate() {
                     <button
                       key={dateStr}
                       data-date={dateStr} // 좌표 계산을 위한 데이터 속성
-                      onPointerDown={(e) => handlePointerDown(dateStr, e)}
-                      onPointerMove={handlePointerMove}
-                      onPointerUp={handlePointerUp}
+                      // 수정 모드일 때 모든 마우스/터치 이벤트 비활성화
+                      onPointerDown={(e) => !roomId && handlePointerDown(dateStr, e)}
+                      onPointerMove={(e) => !roomId && handlePointerMove(e)}
+                      onPointerUp={(e) => !roomId && handlePointerUp(e)}
+                      disabled={!!roomId}
                       onDragStart={(e) => e.preventDefault()} // 브라우저 기본 드래그 방지
                       onContextMenu={(e) => e.preventDefault()} // 모바일 롱클릭 메뉴 방지
                       style={{ 
@@ -315,7 +348,9 @@ export default function ReservationEnsembleCreate() {
                 </div>
 
                 <select
-                  className="w-full p-3 rounded-xl border border-[#30363d] bg-[#0d1117] text-[#f0f6fc] focus:ring-2 focus:ring-[#58a6ff] outline-none"
+                  disabled={!!roomId}
+                  className={`w-full p-3 rounded-xl border border-[#30363d] bg-[#0d1117] text-[#f0f6fc] focus:ring-2 focus:ring-[#58a6ff] outline-none
+                    ${!!roomId ? "opacity-50 cursor-not-allowed" : ""}`}
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
                 >
@@ -336,7 +371,9 @@ export default function ReservationEnsembleCreate() {
                 </div>
 
                 <select
-                  className="w-full p-3 rounded-xl border border-[#30363d] bg-[#0d1117] text-[#f0f6fc] focus:ring-2 focus:ring-[#58a6ff] outline-none"
+                  disabled={!!roomId}
+                  className={`w-full p-3 rounded-xl border border-[#30363d] bg-[#0d1117] text-[#f0f6fc] focus:ring-2 focus:ring-[#58a6ff] outline-none
+                    ${!!roomId ? "opacity-50 cursor-not-allowed" : ""}`}
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
                 >

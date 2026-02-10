@@ -9,6 +9,7 @@ import { supabase } from "@/utils/supabase";
 
 export default function ReservationEnsembleSelect() {
     const router = useRouter();
+    const [roomId, setRoomId] = useState<string | null>(null);
     const [userName, setUserName] = useState("");
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [ensembleData, setEnsembleData] = useState<{
@@ -37,46 +38,78 @@ export default function ReservationEnsembleSelect() {
     const [showShareGuide, setShowShareGuide] = useState(false);
 
     useEffect(() => {
+        // 마운트 시 URL에서 roomId를 추출하여 상태에 저장합니다.
+        const searchParams = new URLSearchParams(window.location.search);
+        const id = searchParams.get("id");
+        setRoomId(id);
+    }, []);
+
+    useEffect(() => {
         // 방 정보 불러오기 (DB)
         const fetchInitialData = async () => {
-            const searchParams = new URLSearchParams(window.location.search);
-            const roomId = searchParams.get("id");
-
             if (!roomId) return;
+            const savedUser = localStorage.getItem("ensembleUser");
 
             try {
-            const { data, error } = await supabase
-                .from("ensemble_rooms")
-                .select("*")
-                .eq("id", roomId)
-                .single();
+                // 방 정보 및 상태 조회 (status 추가)
+                const { data: roomData, error: roomError } = await supabase
+                    .from("ensemble_rooms")
+                    .select("*")
+                    .eq("id", roomId)
+                    .single();
 
-            if (error) throw error;
+                if (roomError) throw roomError;
 
-            if (data) {
-                // 단 한 번의 업데이트로 합침
-                setEnsembleData({
-                id: data.id,
-                title: data.title,
-                dates: data.target_dates,
-                startTime: data.start_time_limit,
-                endTime: data.end_time_limit,
-                });
-            }
+                if (roomData) {
+                    // 방이 이미 확정되었다면 결과 페이지로 튕겨내기
+                    if (roomData.status === 'confirmed') {
+                        alert("이미 최종 확정된 합주입니다.");
+                        router.replace(`/ensembleCreate/result?id=${roomId}`);
+                        return;
+                    }
+
+                    setEnsembleData({
+                        id: roomData.id,
+                        title: roomData.title,
+                        dates: roomData.target_dates,
+                        startTime: roomData.start_time_limit,
+                        endTime: roomData.end_time_limit,
+                    });
+                }
+                // 로그인 정보가 있다면 기존 응답 불러오기
+                if (savedUser) {
+                    setUserName(savedUser);
+                    setIsLoggedIn(true);
+
+                    const { data: existingResponse } = await supabase
+                        .from("ensemble_availability")
+                        .select("*")
+                        .eq("room_id", roomId)
+                        .eq("user_name", savedUser.trim())
+                        .maybeSingle();
+
+                    if (existingResponse) {
+                        // 세션 복구
+                        setSelectedSessions(new Set(existingResponse.selected_sessions));
+                        
+                        // 시간 셀(Grid Key) 복구 
+                        const restoredCells = new Set<string>();
+                        existingResponse.available_slots.forEach((slot: string) => {
+                            // DB에 "2026-02-10 14:00"으로 저장되어 있다면
+                            // 1번에서 바꾼 cellKey 형식인 "2026-02-10-14:00"으로 변환만 하면 됩니다.
+                            const [date, time] = slot.split(" ");
+                            const cellKey = `${date}-${time}`; 
+                            restoredCells.add(cellKey);
+                        });
+                        setSelectedCells(restoredCells);
+                    }
+                }
             } catch (err) {
             console.error("데이터 로딩 실패:", err);
             }
         };
-
-        // 로그인 정보 불러오기 (Local)
-        const savedUser = localStorage.getItem("ensembleUser");
-        if (savedUser) {
-            setUserName(savedUser);
-            setIsLoggedIn(true);
-        }
-
         fetchInitialData();
-    }, []); // 마운트 시 한 번만 실행
+    }, [roomId, router]); // 의존성 추가
 
     // 드래그 이벤트
     useEffect(() => {
@@ -256,51 +289,35 @@ export default function ReservationEnsembleSelect() {
             alert("이름, 세션, 시간을 모두 선택해주세요!");
             return;
         }
+        if (!roomId || !ensembleData) return;
 
-        const searchParams = new URLSearchParams(window.location.search);
-        const roomId = searchParams.get("id");
-        if (!roomId) return;
-
-        // 2. 날짜 형식 표준화 (이 부분은 순수하게 변환만 합니다)
+        // 날짜 형식 표준화 
         const standardizedSlots = Array.from(selectedCells).map(cellKey => {
-            const [displayDate, time] = cellKey.split("-");
-            const fullDate = ensembleData.dates.find((d: string) => {
-                const [,, day] = d.split("-");
-                const displayDay = displayDate.split("/")[1];
-                return parseInt(day) === parseInt(displayDay);
-            });
-            return `${fullDate} ${time}`;
+            const lastIndex = cellKey.lastIndexOf("-");
+            const date = cellKey.substring(0, lastIndex); // "2026-02-03"
+            const time = cellKey.substring(lastIndex + 1); // "14:00"
+            return `${date} ${time}`; // DB 저장 형식: "2026-02-03 14:00"
         });
 
-        //  DB 저장 (map 밖에서 딱 한 번만 실행)
+        //  DB 저장 
         try {
             const { error } = await supabase
                 .from("ensemble_availability")
-                .insert([{
-                    room_id: roomId,
-                    user_name: userName.trim(),
-                    selected_sessions: Array.from(selectedSessions), // 세션 배열
-                    available_slots: standardizedSlots,              // 시간 배열
-                }]);
+                .upsert(
+                    {
+                        room_id: roomId,
+                        user_name: userName.trim(),
+                        selected_sessions: Array.from(selectedSessions),
+                        available_slots: standardizedSlots,
+                        updated_at: new Date().toISOString(), // 수정 시간 기록
+                    },
+                    { onConflict: 'room_id,user_name' } // 이름과 방 번호가 같으면 덮어쓰기
+                );
 
             if (error) throw error;
 
-            // 로컬 스토리지 업데이트 (백업용 - 필요 없으면 빼도 됨)
-            const userSelection = {
-                userName: userName.trim(),
-                sessions: Array.from(selectedSessions),
-                availableSlots: standardizedSlots,
-                updatedAt: new Date().toISOString(),
-            };
-            const existingResponses = JSON.parse(localStorage.getItem("ensembleResponses") || "[]");
-            const updatedResponses = [
-                ...existingResponses.filter((r: any) => r.userName !== userSelection.userName),
-                userSelection
-            ];
-            localStorage.setItem("ensembleResponses", JSON.stringify(updatedResponses));
-
-            // 성공 시 결과 페이지로 이동
-            router.push(`/ensemble/result?id=${roomId}`);
+            // 이동할 때 replace를 사용하여 뒤로가기 시 폼 재제출 방지
+            router.replace(`/ensembleCreate/result?id=${roomId}`);
             
         } catch (err) {
             console.error("데이터 저장 실패:", err);
@@ -437,8 +454,10 @@ export default function ReservationEnsembleSelect() {
                                 </div>
 
                                 {/* 해당 시간대의 날짜별 셀들 */}
-                                {days.map((d) => {
-                                    const cellKey = `${d.dateDisplay}-${t}`;
+                                {days.map((d, idx) => {
+                                    // d.dateDisplay(2/3) 대신 ensembleData에 들어있는 원본 날짜(2026-02-03)를 씁니다.
+                                    const fullDate = ensembleData.dates[idx]; 
+                                    const cellKey = `${fullDate}-${t}`; // "2026-02-03-14:00" 형태 (안전)
                                     const selected = selectedCells.has(cellKey);
                                     return (
                                     <div
