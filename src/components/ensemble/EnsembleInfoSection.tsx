@@ -52,21 +52,19 @@ function save_comments(ensemble_id: string, comments: LocalComment[]) {
   }
 }
 
-function get_instrument_icon(instrument?: string) {
-  switch (instrument) {
-    case "Bass":
-      return "🎸";
-    case "Guitar":
-      return "🎸";
-    case "Drums":
-      return "🥁";
-    case "Keyboard":
-      return "🎹";
-    case "Vocal":
-      return "🎤";
-    default:
-      return "🎵";
-  }
+function get_instrument_icon(sessions?: string[]) {
+  if (!sessions || sessions.length === 0) return "🎵";
+  
+  // 첫 번째 세션을 기준으로 아이콘 결정
+  const session = sessions[0].toLowerCase();
+
+  if (session.includes("보컬") || session.includes("vocal") || session.includes("🎤")) return "🎤";
+  if (session.includes("기타") || session.includes("guitar") || session.includes("🎸")) return "🎸";
+  if (session.includes("베이스") || session.includes("bass")) return "🎸"; // 베이스도 기타 아이콘
+  if (session.includes("드럼") || session.includes("drum") || session.includes("🥁")) return "🥁";
+  if (session.includes("건반") || session.includes("피아노") || session.includes("piano") || session.includes("key")) return "🎹";
+  
+  return "🎵";
 }
 
 export default function EnsembleInfoSection({ ensemble, participants }: Props) {
@@ -210,20 +208,22 @@ export default function EnsembleInfoSection({ ensemble, participants }: Props) {
               </div>
             ) : (
               <ul className="space-y-3">
-                {participants.map((p) => (
+                {participants.map((p,idx) => (
                   <li
-                    key={p.id}
+                    key={idx}
                     className="flex items-center justify-between rounded-lg bg-[#252525] border border-gray-800 p-3 hover:bg-[#2a2a2a] transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/10 text-xl border border-blue-500/20">
-                        {get_instrument_icon(p.instrument)}
+                        {get_instrument_icon(p.sessions)}
                       </div>
                       <span className="text-base font-medium text-gray-200">{p.name}</span>
                     </div>
-                    <span className="text-xs font-medium text-blue-400 bg-blue-900/20 px-2 py-1 rounded">
-                      {p.instrument ?? "-"}
-                    </span>
+                    {p.sessions?.map((s) => (
+                      <span key={s} className="text-[10px] font-medium text-blue-400 bg-blue-900/20 px-2 py-1 rounded">
+                        {s}
+                      </span>
+                    ))}
                   </li>
                 ))}
               </ul>

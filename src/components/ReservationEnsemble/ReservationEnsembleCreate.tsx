@@ -1,9 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useMemo, useEffect } from 'react';
 import { timeToMinutes } from "@/utils/date";
-import { Clock, Check, MapPin, User} from "lucide-react";
+import { Clock, Check, MapPin} from "lucide-react";
 import {
   startOfMonth,
   endOfMonth,
@@ -15,11 +15,13 @@ import {
   isSameMonth,
   format
 } from "date-fns";
+import { supabase } from "@/utils/supabase";
 
 export default function ReservationEnsembleCreate() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const roomId = searchParams.get("id");
   const [ensembleTitle, setEnsembleTitle] = useState("");
-  const [hostName, setHostName] = useState("");
 
   const [currentMonth, setCurrentMonth] = useState<Date | null>(null);
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
@@ -31,10 +33,33 @@ export default function ReservationEnsembleCreate() {
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("");
 
-  // hydration 에러->첫 렌더를 동일하게
   useEffect(() => {
-    setCurrentMonth(new Date());
-  }, []);
+    if (!roomId) return;
+
+    const fetchRoomData = async () => {
+      const { data, error } = await supabase
+        .from("ensemble_rooms")
+        .select("*")
+        .eq("id", roomId)
+        .single();
+
+      if (data && !error) {
+        setEnsembleTitle(data.title);
+        setLocation(data.location || "");
+        setSelectedDates(new Set(data.target_dates)); // 기존 날짜 복구
+        setStartTime(data.start_time_limit);
+        setEndTime(data.end_time_limit);
+        
+        // 달력 월(Month) 위치 조정 (선택된 첫 날짜 기준)
+        if (data.target_dates.length > 0) {
+          const firstDate = new Date(data.target_dates[0]);
+          setCurrentMonth(firstDate);
+        }
+      }
+    };
+
+    fetchRoomData();
+  }, [roomId]);
 
   // 1. 드래그 시작
   const handlePointerDown = (dateStr: string, e: React.PointerEvent) => {
@@ -113,19 +138,39 @@ export default function ReservationEnsembleCreate() {
     endTime !== "" &&
     timeToMinutes(startTime) < timeToMinutes(endTime);
 
-  const handleCreateEnsemble = () => {
+  const handleCreateEnsemble = async() => {
+    // DB 컬럼명에 맞춘 데이터 구성
     const payload = {
       title: ensembleTitle,
-      location,
-      dates: Array.from(selectedDates).sort(),
-      startTime,
-      endTime,
+      location: location,
+      target_dates: Array.from(selectedDates).sort(),
+      start_time_limit: startTime, // DB의 start_time_limit 컬럼
+      end_time_limit: endTime,     // DB의 end_time_limit 컬럼
+      updated_at: new Date().toISOString(), // 업데이트 시간 기록
     };
-    // 로컬 스토리지에 저장
-    localStorage.setItem("ensembleDraft", JSON.stringify(payload));
-    
-    // Page 2로 이동
-    router.push(`/ensemble/select`);
+    try {
+      if (roomId) {
+        // 수정 모드: 제목과 장소만 업데이트됨 (날짜/시간은 UI에서 막았으므로 기존값 유지)
+        const { error } = await supabase
+          .from('ensemble_rooms')
+          .update(payload)
+          .eq('id', roomId);
+        if (error) throw error;
+        router.push(`/ensembleCreate/select?id=${roomId}`);
+      } else {
+        // 생성 모드: 기존 insert 로직
+        const { data, error } = await supabase
+          .from('ensemble_rooms')
+          .insert([payload])
+          .select()
+          .single();
+        if (error) throw error;
+        router.push(`/ensembleCreate/select?id=${data.id}`);
+      }
+    } catch (error) {
+      console.error("방 생성 실패:", error);
+      alert("서버 저장에 실패했습니다. 다시 시도해주세요.");
+    }
   };
   // 취소 버튼 함수 추가
   const handleCancel = () => {
@@ -189,7 +234,7 @@ export default function ReservationEnsembleCreate() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           {/* 날짜 범위 선택 */}
           <section className="space-y-10">
-            {/* <h3 className="text-lg font-semibold mb-6 text-center text-[#f0f6fc]">날짜 범위 선택</h3> */}
+            <h3 className="text-lg font-semibold mb-6 text-center text-[#f0f6fc]">날짜 범위 선택</h3>
             <div className="bg-[#161b22] border border-[#30363d] rounded-3xl p-6 shadow-xl">
               <div className="flex justify-between items-center mb-6 px-2">
                 <span className="font-bold text-[#58a6ff]">
@@ -235,9 +280,11 @@ export default function ReservationEnsembleCreate() {
                     <button
                       key={dateStr}
                       data-date={dateStr} // 좌표 계산을 위한 데이터 속성
-                      onPointerDown={(e) => handlePointerDown(dateStr, e)}
-                      onPointerMove={handlePointerMove}
-                      onPointerUp={handlePointerUp}
+                      // 수정 모드일 때 모든 마우스/터치 이벤트 비활성화
+                      onPointerDown={(e) => !roomId && handlePointerDown(dateStr, e)}
+                      onPointerMove={(e) => !roomId && handlePointerMove(e)}
+                      onPointerUp={(e) => !roomId && handlePointerUp(e)}
+                      disabled={!!roomId}
                       onDragStart={(e) => e.preventDefault()} // 브라우저 기본 드래그 방지
                       onContextMenu={(e) => e.preventDefault()} // 모바일 롱클릭 메뉴 방지
                       style={{ 
@@ -264,43 +311,29 @@ export default function ReservationEnsembleCreate() {
                 선택 또는 드래그하여 날짜를 선택하세요
               </p>
             </div>
-
-            {/* 장소 입력 */}
-            <div className="bg-[#161b22] border border-[#30363d] rounded-3xl p-6 shadow-xl">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="p-1.5 bg-purple-500/10 rounded-md">
-                  <MapPin className="w-3.5 h-3.5 text-purple-400" />
-                </div>
-                <label className="text-xs font-bold text-gray-400 uppercase">합주 장소</label>
-              </div>
-              <input
-                type="text"
-                placeholder="예: 미케닉스 동아리방"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                className="w-full p-3 rounded-xl border border-[#30363d] bg-[#0d1117] text-[#f0f6fc] focus:ring-2 focus:ring-[#58a6ff] outline-none"
-              />
-            </div>
           </section>
 
           {/* 시간 범위 선택 */}
           <section>
-            {/*<h3 className="text-lg font-semibold mb-6 text-center text-[#f0f6fc]">이름 / 시간 범위</h3>*/}
+            <h3 className="text-lg font-semibold mb-6 text-center text-[#f0f6fc]">장소 / 시간 범위</h3>
             <div className="bg-[#161b22] border border-[#30363d] rounded-3xl p-8 relative space-y-8">
-              {/* 방장 이름 */}
+               {/* 장소 입력 */}
               <div className="space-y-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <div className="p-1.5 bg-green-500/10 rounded-md">
-                    <User className="w-3.5 h-3.5 text-green-400" />
+                  <div className="p-1.5 bg-purple-500/10 rounded-md">
+                    <MapPin className="w-3.5 h-3.5 text-purple-400" />
                   </div>
-                  <label className="text-xs font-bold text-gray-400 uppercase">방장 이름 (본인)</label>
+                  <label className="text-xs font-bold text-gray-400 uppercase">장소 입력</label>
                 </div>
                 <input
                   type="text"
-                  placeholder="이름을 입력하세요"
-                  value={hostName}
-                  onChange={(e) => setHostName(e.target.value)}
-                  className="w-full p-3 rounded-xl border border-[#30363d] bg-[#0d1117] text-[#f0f6fc] focus:ring-2 focus:ring-[#58a6ff] outline-none"
+                  placeholder="예: 미케닉스 동아리방"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#30363d]
+                            bg-[#0d1117] text-[#f0f6fc]
+                            placeholder-[#8b949e]
+                            focus:ring-2 focus:ring-[#58a6ff] outline-none"
                 />
               </div>
               {/* 시작 시간 선택 */}
@@ -315,7 +348,9 @@ export default function ReservationEnsembleCreate() {
                 </div>
 
                 <select
-                  className="w-full p-3 rounded-xl border border-[#30363d] bg-[#0d1117] text-[#f0f6fc] focus:ring-2 focus:ring-[#58a6ff] outline-none"
+                  disabled={!!roomId}
+                  className={`w-full p-3 rounded-xl border border-[#30363d] bg-[#0d1117] text-[#f0f6fc] focus:ring-2 focus:ring-[#58a6ff] outline-none
+                    ${!!roomId ? "opacity-50 cursor-not-allowed" : ""}`}
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
                 >
@@ -336,7 +371,9 @@ export default function ReservationEnsembleCreate() {
                 </div>
 
                 <select
-                  className="w-full p-3 rounded-xl border border-[#30363d] bg-[#0d1117] text-[#f0f6fc] focus:ring-2 focus:ring-[#58a6ff] outline-none"
+                  disabled={!!roomId}
+                  className={`w-full p-3 rounded-xl border border-[#30363d] bg-[#0d1117] text-[#f0f6fc] focus:ring-2 focus:ring-[#58a6ff] outline-none
+                    ${!!roomId ? "opacity-50 cursor-not-allowed" : ""}`}
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
                 >
@@ -366,11 +403,11 @@ export default function ReservationEnsembleCreate() {
               <button
                 type="button"
                 onClick={handleCreateEnsemble}
-                disabled={!ensembleTitle || !hostName || selectedDates.size === 0 || !isTimeRangeValid}
+                disabled={!ensembleTitle || selectedDates.size === 0 || !isTimeRangeValid}
                 className={`flex-[2] py-3 rounded-xl font-bold
                   transition flex justify-center items-center gap-2 shadow-lg shadow-blue-900/20
                   ${
-                    !ensembleTitle || !hostName || selectedDates.size === 0 || !isTimeRangeValid
+                    !ensembleTitle || selectedDates.size === 0 || !isTimeRangeValid
                       ? "bg-blue-900/50 text-blue-200/50 cursor-not-allowed"
                       : "bg-blue-600 hover:bg-blue-500 text-white"
                   }`}

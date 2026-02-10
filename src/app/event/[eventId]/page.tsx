@@ -8,6 +8,20 @@ import { supabaseServer } from "@/utils/supabase-server";
 import type { Concert, SetListItem } from "@/types/concert_detail";
 import type { Ensemble, Participant } from "@/types/ensemble_detail";
 
+type EnsembleRow = {
+  id: string;
+  room_id: string;
+  title: string;
+  date: string;
+  start_time: string; // "HH:mm" (이미 확정된 데이터라 보정됨)
+  end_time: string;   // "HH:mm"
+  location: string | null;
+  description: string | null;
+  participants: Participant[] | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type ConcertRow = {
   id: string;
   title: string;
@@ -29,12 +43,34 @@ export default async function EventDetailPage({
   params: Promise<{ eventId: string }>;
 }) {
   const { eventId } = await params;
-  /**
-   * 1) 합주 조회 (❗현재는 DB 미구현 → null 고정)
-   * 나중에 ensemble 테이블 붙일 자리
-   */
-  const ensemble: Ensemble | null = null;
-  const participants: Participant[] = []; // 나중에 타입 확정되면 교체
+  
+  // 합주(ensemble) 조회 추가
+  const { data: ensembleData } = await supabaseServer
+    .from("ensemble")
+    .select("*")
+    .eq("id", eventId)
+    .maybeSingle<EnsembleRow>();
+  // 합주 데이터 처리
+  let ensemble: Ensemble | null = null;
+  let participants: Participant[] = [];
+
+  if (ensembleData) {
+    ensemble = {
+      id: ensembleData.id,
+      room_id: ensembleData.room_id,
+      title: ensembleData.title,
+      date: ensembleData.date,
+      start_time: ensembleData.start_time,
+      end_time: ensembleData.end_time,
+      location: ensembleData.location ?? undefined,
+      description: ensembleData.description ?? undefined,
+      created_at: ensembleData.created_at,
+      updated_at: ensembleData.updated_at,
+    } as Ensemble;
+
+    // DB의 JSONB 데이터를 Participant 타입으로 할당
+    participants = ensembleData.participants || [];
+  }
 
   // 2) 공연(DB) 조회
   const { data: concert } = await supabaseServer
