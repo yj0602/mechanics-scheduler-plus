@@ -5,10 +5,10 @@ import { supabase } from "@/utils/supabase";
 import type { Concert, SetListItem } from "@/types/concert_detail";
 import { v4 as uuidv4 } from "uuid";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Calendar,
   MapPin,
-  LogOut,
   Edit3,
   Save,
   X,
@@ -250,12 +250,12 @@ const startEdit = () => {
 
       {/* 헤더 */}
       <header className="w-full max-w-xl mb-8 flex items-center justify-between relative z-10">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white font-black text-xs shadow-lg shadow-violet-500/20 ring-1 ring-white/10"></div>
-          <span className="text-xl font-bold tracking-tight text-white/90">
-            BandMeet
-          </span>
-        </div>
+          <Link href="/" className="flex items-center gap-3 cursor-pointer">
+            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white font-black text-xs shadow-lg shadow-violet-500/20 ring-1 ring-white/10"></div>
+            <span className="text-xl font-bold tracking-tight text-white/90">
+              BandMeet
+            </span>
+          </Link>
       </header>
 
       {/* 메인 티켓 UI */}

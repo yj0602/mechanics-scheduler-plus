@@ -2,6 +2,7 @@
 "use client"
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   useEnsembleComments, useAddEnsembleComment, useDeleteEnsembleComment
 } from "@/hooks/useReservations"
@@ -89,10 +90,10 @@ function get_instrument_icon(sessions?: string[]) {
     <header className="mb-8 relative z-10">
     {/* 1행: 좌 로고 / 우 버튼 */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <div className="h-8 w-8 rounded bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold text-xs"></div>
             <span className="text-lg font-bold tracking-tight text-gray-100">BandMeet</span>
-          </div>
+          </Link>
         </div>
 
     {/* 2행: (모바일) 캡슐 */}
