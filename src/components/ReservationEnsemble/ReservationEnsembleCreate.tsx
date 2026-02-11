@@ -34,6 +34,9 @@ export default function ReservationEnsembleCreate() {
   const [endTime, setEndTime] = useState("");
 
   useEffect(() => {
+    const now = new Date();
+    setCurrentMonth(now);
+    
     if (!roomId) return;
 
     const fetchRoomData = async () => {
@@ -52,8 +55,7 @@ export default function ReservationEnsembleCreate() {
         
         // 달력 월(Month) 위치 조정 (선택된 첫 날짜 기준)
         if (data.target_dates.length > 0) {
-          const firstDate = new Date(data.target_dates[0]);
-          setCurrentMonth(firstDate);
+          setCurrentMonth(new Date(data.target_dates[0]));
         }
       }
     };
@@ -147,6 +149,7 @@ export default function ReservationEnsembleCreate() {
       start_time_limit: startTime, // DB의 start_time_limit 컬럼
       end_time_limit: endTime,     // DB의 end_time_limit 컬럼
       updated_at: new Date().toISOString(), // 업데이트 시간 기록
+      status: 'open'
     };
     try {
       if (roomId) {
@@ -157,15 +160,20 @@ export default function ReservationEnsembleCreate() {
           .eq('id', roomId);
         if (error) throw error;
         router.push(`/ensembleCreate/select?id=${roomId}`);
+        return;
       } else {
         // 생성 모드: 기존 insert 로직
         const { data, error } = await supabase
           .from('ensemble_rooms')
           .insert([payload])
-          .select()
-          .single();
+          .select('id');
         if (error) throw error;
-        router.push(`/ensembleCreate/select?id=${data.id}`);
+        
+        if (data && data[0]) {
+          router.push(`/ensembleCreate/select?id=${data[0].id}`);
+        } else {
+          alert("데이터 저장 후 정보를 가져오지 못했습니다.");
+        }
       }
     } catch (error) {
       console.error("방 생성 실패:", error);
