@@ -4,6 +4,7 @@ import { Reservation } from "@/types";
 import { formatToDbDate } from "@/utils/date";
 import type { Ensemble, Participant } from "@/types/ensemble_detail";
 import type { Concert, SetListItem } from "@/types/concert_detail";
+import { useEffect } from "react"; // ✅ 추가
 
 // Supabase에서 가져온 데이터 타입 (DB 원본)
 type EnsembleRow = {
@@ -231,8 +232,64 @@ const concertToReservation = (c: Concert): Reservation => ({
   created_at: c.created_at,
 });
 
+// ✅ [NEW] 실시간 구독 훅 추가
+export const useRealtimeReservations = () => {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    // 세 개의 테이블을 모두 구독
+    const channel = supabase
+      .channel('reservations-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // INSERT, UPDATE, DELETE 모두 감지
+          schema: 'public',
+          table: 'ensemble'
+        },
+        () => {
+          // ensemble 테이블 변경 시 예약 쿼리 갱신
+          queryClient.invalidateQueries({ queryKey: ["reservations"] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'concerts'
+        },
+        () => {
+          // concerts 테이블 변경 시 예약 쿼리 갱신
+          queryClient.invalidateQueries({ queryKey: ["reservations"] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'personal_events'
+        },
+        () => {
+          // personal_events 테이블 변경 시 예약 쿼리 갱신
+          queryClient.invalidateQueries({ queryKey: ["reservations"] });
+        }
+      )
+      .subscribe();
+
+    // 컴포넌트 언마운트 시 구독 해제
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+};
+
 // [Read] 특정 기간(주간/월간)의 예약 가져오기
 export const useReservations = (startDate: Date, endDate: Date) => {
+  // ✅ 실시간 구독 활성화
+  useRealtimeReservations();
+
   return useQuery({
     queryKey: ["reservations", formatToDbDate(startDate), formatToDbDate(endDate)],
     queryFn: async () => {
@@ -262,6 +319,9 @@ export const useReservations = (startDate: Date, endDate: Date) => {
 
 // [Read] 다가오는 예약 (통합)
 export const useUpcomingReservations = () => {
+  // ✅ 실시간 구독 활성화
+  useRealtimeReservations();
+
   return useQuery({
     queryKey: ["reservations", "upcoming"],
     queryFn: async () => {
@@ -410,6 +470,9 @@ export const useUpdateEnsemble = () => {
 
 // [NEW] 리스트 뷰용: 오늘 이후의 모든 예약 가져오기
 export const useAllUpcomingReservations = () => {
+  // ✅ 실시간 구독 활성화
+  useRealtimeReservations();
+
   return useQuery({
     queryKey: ["reservations", "all_upcoming"],
     queryFn: async () => {
