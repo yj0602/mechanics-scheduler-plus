@@ -14,8 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 // ✅ 배포/로컬 모두 안정적으로 동작하게 "확정 URL" 사용
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const siteUrl = "https://bandmeet.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -32,7 +31,6 @@ export const metadata: Metadata = {
     siteName: "BandMeet",
     images: [
       {
-        // ✅ metadataBase가 있으므로 상대경로 OK (절대경로로 자동 변환됨)
         url: `${siteUrl}/og-image.png`,
         width: 1200,
         height: 630,
