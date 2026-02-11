@@ -15,11 +15,12 @@ import {
   ChevronRight,
   Calendar as CalendarIcon,
   User,
+  X,
 } from "lucide-react";
 import { Reservation } from "@/types";
-import { useReservations } from "@/hooks/useReservations"; // React Query Hook
+import { useReservations } from "@/hooks/useReservations";
 import { getKSTStartOfWeek, formatToDbDate, timeToMinutes } from "@/utils/date";
-import { getReservationColor } from "@/utils/colors"; // 색상 유틸
+import { getReservationColor } from "@/utils/colors";
 
 interface WeeklyTimetableProps {
   currentDate: Date;
@@ -32,13 +33,16 @@ export default function WeeklyTimetable({
   onDateChange,
   onReservationClick,
 }: WeeklyTimetableProps) {
+  // 기존 상태(현재 코드에서 안쓰는 것 같지만 남겨둠)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{
     date: Date;
     time: string;
   } | null>(null);
 
-  // 1. 날짜 범위 계산 (React Query 키로 사용됨)
+  // ✅ 겹침 목록 모달용 상태
+  const [overlapList, setOverlapList] = useState<Reservation[] | null>(null);
+
   const { startDay, endDay, weekDays } = useMemo(() => {
     const start = getKSTStartOfWeek(currentDate);
     const end = addDays(start, 6);
@@ -46,7 +50,6 @@ export default function WeeklyTimetable({
     return { startDay: start, endDay: end, weekDays: days };
   }, [currentDate]);
 
-  // 2. React Query로 데이터 가져오기 (로딩/캐싱 자동 처리)
   const { data: reservations = [], isLoading } = useReservations(
     startDay,
     endDay
@@ -58,35 +61,98 @@ export default function WeeklyTimetable({
   const handleNextWeek = () => onDateChange(addWeeks(currentDate, 1));
   const handleToday = () => onDateChange(new Date());
 
-  // 특정 시간 슬롯에 해당하는 예약 찾기
-  const getReservation = (targetDate: Date, hour: number, minute: number) => {
+  // ✅ 겹치는 모든 일정
+  const getOverlappingReservations = (
+    targetDate: Date,
+    hour: number,
+    minute: number
+  ) => {
     const dateStr = formatToDbDate(targetDate);
     const currentSlotMinutes = hour * 60 + minute;
 
-    return reservations.find((r) => {
+    return reservations.filter((r) => {
       if (r.date !== dateStr) return false;
       const startMinutes = timeToMinutes(r.start_time);
       const endMinutes = timeToMinutes(r.end_time);
-      return (
-        currentSlotMinutes >= startMinutes && currentSlotMinutes < endMinutes
-      );
+      return currentSlotMinutes >= startMinutes && currentSlotMinutes < endMinutes;
     });
   };
 
-  // 빈 슬롯 클릭 시 기존 예약 모달 표시 함수
-  // const handleEmptySlotClick = (day: Date, hour: number, minute: number) => {
-  //   const timeStr = `${String(hour).padStart(2, "0")}:${
-  //     minute === 0 ? "00" : "30"
-  //   }`;
-  //   setSelectedSlot({ date: day, time: timeStr });
-  //   setIsCreateModalOpen(true);
-  // };
+  // ✅ 셀 클릭 행동: 1개면 바로 상세 / 여러개면 목록 모달
+  const handleSlotClick = (list: Reservation[]) => {
+    if (list.length === 1) onReservationClick(list[0]);
+    else setOverlapList(list);
+  };
 
   return (
     <div className="flex flex-col h-full bg-[#1E1E1E] text-gray-200 rounded-xl shadow-lg border border-gray-800 overflow-hidden relative">
       {isLoading && (
         <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      )}
+
+      {/* ✅ 겹침 목록 모달 */}
+      {overlapList && (
+        <div className="absolute inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-xl border border-gray-700 bg-[#1b1b1b] shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-[#222]">
+              <div className="font-bold text-sm text-gray-200">
+                겹치는 일정 {overlapList.length}개
+              </div>
+              <button
+                onClick={() => setOverlapList(null)}
+                className="p-1 rounded-md hover:bg-white/10 text-gray-300"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto">
+              {overlapList.map((res) => {
+                const colors = getReservationColor(res.id);
+                return (
+                  <button
+                    key={res.id}
+                    onClick={() => {
+                      setOverlapList(null);
+                      onReservationClick(res);
+                    }}
+                    className={`w-full text-left px-4 py-3 border-b border-gray-800 last:border-b-0 hover:bg-white/5 transition`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className={`font-bold text-sm truncate ${colors.title}`}>
+                          {res.purpose}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {res.start_time} ~ {res.end_time}
+                        </div>
+                        {res.kind === "personal" && res.name && (
+                          <div className="flex items-center gap-1 mt-1 text-xs text-gray-400">
+                            <User className="w-3 h-3" />
+                            <span className="truncate">{res.name}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <span
+                        className={`shrink-0 text-[10px] px-2 py-1 rounded-full border border-white/10 ${colors.bg}`}
+                      >
+                        {res.kind === "personal"
+                          ? "개인"
+                          : res.kind === "ensemble"
+                          ? "합주"
+                          : res.kind === "concert"
+                          ? "공연"
+                          : "기타"}                      
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 
@@ -179,73 +245,76 @@ export default function WeeklyTimetable({
               className="flex flex-col border-r border-gray-800 last:border-r-0"
             >
               {timeSlots.map((time) => {
-                // 30분 단위 슬롯 2개 생성
                 return [0, 30].map((minute) => {
-                  const res = getReservation(day, time, minute);
+                  const overlappingRes = getOverlappingReservations(day, time, minute);
 
-                  // 예약 없음: 빈 슬롯 렌더링
-                  if (!res) {
+                  // 빈 슬롯
+                  if (overlappingRes.length === 0) {
                     return (
                       <div
                         key={`${time}-${minute}`}
                         className="h-7 md:h-10 border-b border-gray-800 border-dashed border-gray-800/50 flex"
                       >
-                        <button
-                          // 기존 빈 슬롯 hover 전부 주석처리 해둠
-                          // className="flex-1 hover:bg-gray-800/50 transition-colors relative group w-full text-left"
-                          // onClick={() =>
-                          //   handleEmptySlotClick(day, time, minute)
-                          // }
-                        >
-                          {/* <span className="hidden group-hover:block absolute top-0.5 left-0.5 text-blue-400 text-[10px] font-bold">
-                            +
-                          </span> */}
-                        </button>
+                        <button className="w-full h-full" />
                       </div>
                     );
                   }
 
-                  // 예약 있음: 색상 및 병합 로직 적용
-                  const colors = getReservationColor(res.id);
-                  const currentSlotMinutes = time * 60 + minute;
-                  const startMinutes = timeToMinutes(res.start_time);
+                  // ✅ 요약 표시: 첫 일정 + 배지(+N)
+                  const topRes = overlappingRes[0];
+                  const extraCount = overlappingRes.length - 1;
 
-                  // [핵심] 예약의 시작 시간인 경우에만 텍스트 표시
+                  const colors = getReservationColor(topRes.id);
+                  const currentSlotMinutes = time * 60 + minute;
+                  const startMinutes = timeToMinutes(topRes.start_time);
                   const isStartSlot = currentSlotMinutes === startMinutes;
 
                   return (
                     <div
                       key={`${time}-${minute}`}
-                      className={`h-7 md:h-10 border-gray-800 relative p-0.5 md:p-1 flex flex-col justify-center
-                        ${colors.bg} 
-                        ${
-                          isStartSlot
-                            ? `border-l-2 md:border-l-4 ${colors.border}`
-                            : `border-l-2 md:border-l-4 ${colors.border} border-t-0`
-                        }
-                      `}
+                      className="h-7 md:h-10 border-b border-gray-800 border-dashed border-gray-800/50"
                     >
                       <button
-                        onClick={() => onReservationClick(res)}
-                        className="w-full h-full text-left overflow-hidden outline-none"
+                        onClick={() => handleSlotClick(overlappingRes)}
+                        className={`w-full h-full relative text-left overflow-hidden rounded-md
+                          ${colors.bg}
+                          ${extraCount > 0 ? "ring-1 ring-white/10" : ""}
+                        `}
                       >
+                        {/* 좌측 강조선(시작 슬롯만 진하게) */}
+                        <span
+                          className={`absolute left-0 top-0 h-full w-[3px] md:w-1 ${
+                            isStartSlot ? colors.border : "border-transparent"
+                          }`}
+                        />
+
+                        {/* 텍스트는 시작 슬롯에서만 */}
                         {isStartSlot && (
-                          <>
+                          <div className="px-1 md:px-1.5 py-0.5">
                             <div
                               className={`font-bold text-[10px] md:text-[11px] leading-tight truncate ${colors.title}`}
                             >
-                              {res.purpose}
+                              {topRes.purpose}
                             </div>
-                            {/* 개인 일정일 경우 예약자 이름 표시 */}
-                            {res.kind === "personal" && res.name && (
+                            {topRes.kind === "personal" && topRes.name && (
                               <div className="flex items-center gap-0.5 mt-0.5">
                                 <User className="w-2 h-2 md:w-2.5 md:h-2.5 text-gray-400" />
                                 <span className="text-[8px] md:text-[9px] text-gray-400 truncate">
-                                  {res.name}
+                                  {topRes.name}
                                 </span>
                               </div>
                             )}
-                          </>
+                          </div>
+                        )}
+
+                        {/* +N 배지 */}
+                        {extraCount > 0 && (
+                          <span className="absolute top-0.5 right-0.5 md:top-1 md:right-1
+                            text-[9px] md:text-[10px] px-1.5 py-0.5 rounded-full
+                            bg-black/40 text-white border border-white/10 backdrop-blur"
+                          >
+                            +{extraCount}
+                          </span>
                         )}
                       </button>
                     </div>
@@ -256,16 +325,6 @@ export default function WeeklyTimetable({
           ))}
         </div>
       </div>
-      {/* {selectedSlot && (
-        <ReservationModal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          selectedDate={selectedSlot.date}
-          startTime={selectedSlot.time}
-          // React Query Mutation이 성공하면 자동으로 리렌더링되므로 onSuccess는 비워둬도 됨 (Modal 닫기만 처리)
-          onSuccess={() => setIsCreateModalModal(false)}
-        />
-      )} */}
     </div>
   );
 }
