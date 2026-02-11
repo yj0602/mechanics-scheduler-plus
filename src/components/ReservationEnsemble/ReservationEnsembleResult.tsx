@@ -20,50 +20,73 @@ export default function ReservationEnsembleResult() {
     const [selectedTimes, setSelectedTimes] = useState<Set<string>>(new Set());
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    useEffect(() => {
-        // 유저 정보 가져오기 (헤더용)
-        setUserName(localStorage.getItem("ensembleUser") || "방문자");
-        const fetchAllData = async () => {
-            if (!roomId) return;
-            try {
-                // 방 정보와 참여자 응답 데이터를 동시에 불러오기
-                const [roomRes, responsesRes] = await Promise.all([
-                    supabase.from("ensemble_rooms").select("*").eq("id", roomId).single(),
-                    supabase.from("ensemble_availability").select("*").eq("room_id", roomId)
-                ]);
+    const fetchAllData = async () => {
+        if (!roomId) return;
+        try {
+            const [roomRes, responsesRes] = await Promise.all([
+                supabase.from("ensemble_rooms").select("*").eq("id", roomId).single(),
+                supabase.from("ensemble_availability").select("*").eq("room_id", roomId)
+            ]);
 
-                if (roomRes.data) {
-                    // 이미 확정된 방이면 안내 후 메인으로 튕겨내기
-                    if (roomRes.data.status === 'confirmed') {
-                        alert("이미 최종 확정이 완료된 합주입니다. 메인 화면에서 확인해주세요.");
-                        router.replace("/");
-                        return;
-                    }
-                    setEnsembleData({
-                        title: roomRes.data.title,
-                        location: roomRes.data.location,
-                        dates: roomRes.data.target_dates,
-                        startTime: roomRes.data.start_time_limit,
-                        endTime: roomRes.data.end_time_limit
-                    });
+            if (roomRes.data) {
+                if (roomRes.data.status === 'confirmed') {
+                    alert("이미 최종 확정이 완료된 합주입니다. 메인 화면에서 확인해주세요.");
+                    router.replace("/");
+                    return;
                 }
-
-                if (responsesRes.data) {
-                    // DB 컬럼명을 코드에서 사용하는 이름(sessions, availableSlots)으로 매핑
-                    const mappedResponses = responsesRes.data.map(r => ({
-                        userName: r.user_name,
-                        sessions: r.selected_sessions,
-                        availableSlots: r.available_slots
-                    }));
-                    setResponses(mappedResponses);
-                }
-            } catch (error) {
-                console.error("데이터 로딩 실패:", error);
-            } finally {
-                setLoading(false);
+                setEnsembleData({
+                    title: roomRes.data.title,
+                    location: roomRes.data.location,
+                    dates: roomRes.data.target_dates,
+                    startTime: roomRes.data.start_time_limit,
+                    endTime: roomRes.data.end_time_limit
+                });
             }
-        };
+
+            if (responsesRes.data) {
+                const mappedResponses = responsesRes.data.map(r => ({
+                    userName: r.user_name,
+                    sessions: r.selected_sessions,
+                    availableSlots: r.available_slots
+                }));
+                setResponses(mappedResponses);
+            }
+        } catch (error) {
+            console.error("데이터 로딩 실패:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // useEffect 내부에서 초기 로드 및 실시간 구독 설정
+    useEffect(() => {
+        setUserName(localStorage.getItem("ensembleUser") || "방문자");
+        
+        // 초기 데이터 로드
         fetchAllData();
+
+        // Supabase 실시간 구독 (Realtime)
+        const channel = supabase
+            .channel(`room-updates-${roomId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*', // INSERT, UPDATE, DELETE 모두 감지
+                    schema: 'public',
+                    table: 'ensemble_availability',
+                    filter: `room_id=eq.${roomId}`
+                },
+                () => {
+                    // 데이터 변경이 감지되면 다시 불러오기
+                    fetchAllData();
+                }
+            )
+            .subscribe();
+
+        // 컴포넌트 언마운트 시 구독 해제
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [roomId]);
 
     // 컴포넌트 내부 상단에 추가
