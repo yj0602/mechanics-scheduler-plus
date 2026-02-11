@@ -369,6 +369,45 @@ export const useDeleteReservation = () => {
   });
 };
 
+// [Update] 합주 정보 수정하기 (제목, 장소)
+export const useUpdateEnsemble = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      id, 
+      title, 
+      location 
+    }: { 
+      id: string; 
+      title: string; 
+      location?: string 
+    }) => {
+      const { data, error } = await supabase
+        .from("ensemble") // table 이름
+        .update({ title, location }) // 변경할 값
+        .eq("id", id) // 어떤 레코드를 바꿀지
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      // 정보 수정 성공 시, 연관된 캐시 데이터를 무효화하여 화면을 최신 상태로 새로고침
+      queryClient.invalidateQueries({ queryKey: ["reservations"] });
+      // 단일 합주 디테일을 불러오는 쿼리가 있다면 그것도 갱신 (선택사항)
+      // queryClient.invalidateQueries({ queryKey: ["ensemble", variables.id] }); 
+      
+      alert("합주 정보가 수정되었습니다.");
+    },
+    onError: (error) => {
+      console.error("합주 정보 수정 실패:", error);
+      alert("합주 정보 수정에 실패했습니다.");
+    },
+  });
+};
+
 // [NEW] 리스트 뷰용: 오늘 이후의 모든 예약 가져오기
 export const useAllUpcomingReservations = () => {
   return useQuery({

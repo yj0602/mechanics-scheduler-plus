@@ -3,8 +3,12 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  useEnsembleComments, useAddEnsembleComment, useDeleteEnsembleComment
+  useEnsembleComments, 
+  useAddEnsembleComment, 
+  useDeleteEnsembleComment, 
+  useUpdateEnsemble
 } from "@/hooks/useReservations"
 import type { Ensemble, Participant } from "@/types/ensemble_detail";
 import { 
@@ -14,8 +18,11 @@ import {
   User, 
   MessageSquare, 
   Trash2, 
-  Send 
-} from "lucide-react"; // 아이콘 통일성을 위해 추가
+  Send,
+  Edit2, 
+  Save,  
+  X      
+} from "lucide-react"; 
 
 type Props = {
   ensemble: Ensemble;
@@ -29,38 +36,44 @@ function format_time_range(start_time: string, end_time: string) {
 function get_instrument_icon(sessions?: string[]) {
   if (!sessions || sessions.length === 0) return "🎵";
   
-  // 첫 번째 세션을 기준으로 아이콘 결정
   const session = sessions[0].toLowerCase();
 
   if (session.includes("보컬") || session.includes("vocal") || session.includes("🎤")) return "🎤";
   if (session.includes("기타") || session.includes("guitar") || session.includes("🎸")) return "🎸";
-  if (session.includes("베이스") || session.includes("bass")) return "🎸"; // 베이스도 기타 아이콘
+  if (session.includes("베이스") || session.includes("bass")) return "🎸"; 
   if (session.includes("드럼") || session.includes("drum") || session.includes("🥁")) return "🥁";
   if (session.includes("건반") || session.includes("피아노") || session.includes("piano") || session.includes("key")) return "🎹";
   
   return "🎵";
 }
 
-  export default function EnsembleInfoSection({ ensemble, participants }: Props) {
+export default function EnsembleInfoSection({ ensemble, participants }: Props) {
   const [comment_text, set_comment_text] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  
+  const [editTitle, setEditTitle] = useState(ensemble.title);
+  const [editLocation, setEditLocation] = useState(ensemble.location ?? "");
+  
+  const [displayTitle, setDisplayTitle] = useState(ensemble.title);
+  const [displayLocation, setDisplayLocation] = useState(ensemble.location ?? "-");
+  
+  const updateEnsemble = useUpdateEnsemble();
+  const router = useRouter();
 
   useEffect(() => {
-    // 1. 현재 body의 스타일을 백업 (나갈 때 복구하기 위해)
     const originalStyle = window.getComputedStyle(document.body).backgroundColor;
     const originalColor = window.getComputedStyle(document.body).color;
 
-    // 2. 배경을 어두운 색(#121212)으로, 글자를 밝은 색으로 변경
     document.body.style.backgroundColor = "#121212";
-    document.body.style.color = "#e5e7eb"; // tailwind text-gray-200
+    document.body.style.color = "#e5e7eb";
 
-    // 3. 컴포넌트가 사라질 때(Unmount) 원래 색으로 복구
     return () => {
       document.body.style.backgroundColor = originalStyle;
       document.body.style.color = originalColor;
     };
   }, []);
 
- const { data: comments = [], isLoading } = useEnsembleComments(ensemble.id);
+  const { data: comments = [], isLoading } = useEnsembleComments(ensemble.id);
   const addComment = useAddEnsembleComment();
   const deleteComment = useDeleteEnsembleComment();
 
@@ -85,10 +98,41 @@ function get_instrument_icon(sessions?: string[]) {
     });
   };
 
+  const handleSaveInfo = async () => {
+    if (!editTitle.trim()) {
+      alert("합주 제목을 입력해주세요.");
+      return;
+    }
+
+    try {
+      await updateEnsemble.mutateAsync({
+        id: ensemble.id,
+        title: editTitle,
+        location: editLocation,
+      });
+
+      setDisplayTitle(editTitle);
+      setDisplayLocation(editLocation || "-");
+      
+      setIsEditing(false);
+      router.refresh(); 
+
+    } catch (error) {
+      console.error(error);
+      setEditTitle(displayTitle);
+      setEditLocation(displayLocation !== "-" ? displayLocation : "");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditTitle(displayTitle);
+    setEditLocation(displayLocation !== "-" ? displayLocation : "");
+    setIsEditing(false);
+  };
+
   return (
     <section className="bg-[#121212] text-gray-200 min-h-screen p-4 md:p-6">
-    <header className="mb-8 relative z-10">
-    {/* 1행: 좌 로고 / 우 버튼 */}
+      <header className="mb-8 relative z-10">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <div className="h-8 w-8 rounded bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold text-xs"></div>
@@ -96,26 +140,64 @@ function get_instrument_icon(sessions?: string[]) {
           </Link>
         </div>
 
-    {/* 2행: (모바일) 캡슐 */}
+        {/* ✅ 제목 (모바일) */}
         <div className="mt-6 md:hidden">
-          <div className="mx-auto rounded-full border border-gray-700 bg-[#1a1a1a] px-6 py-3 text-lg font-semibold truncate text-center text-gray-100 shadow-lg">
-            {ensemble.title}
-          </div>
+          {isEditing ? (
+            <input 
+              value={editTitle} 
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="mx-auto block w-full max-w-[85vw] rounded-full border border-blue-500 bg-[#1a1a1a] px-6 py-3 text-lg font-semibold text-center text-white shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition-all placeholder:text-gray-600"
+              placeholder="합주 제목"
+              autoFocus
+            />
+          ) : (
+            <div className="mx-auto rounded-full border border-gray-700 bg-[#1a1a1a] px-6 py-3 text-lg font-semibold text-center text-gray-100 shadow-lg">
+              <span className="truncate block">{displayTitle}</span>
+            </div>
+          )}
         </div>
 
-    {/* (데스크탑) 캡슐: 1행 위에 겹쳐서 중앙 고정 */}
+        {/* ✅ 제목 (데스크탑) */}
         <div className="relative hidden md:block">
           <div className="absolute left-1/2 top-[-44px] -translate-x-1/2">
-            <div className="rounded-full border border-gray-700 bg-[#1a1a1a] px-12 py-3 text-xl font-semibold truncate max-w-[60vw] text-center text-gray-100 shadow-xl">
-              {ensemble.title}
-            </div>
+            {isEditing ? (
+              <input 
+                value={editTitle} 
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="rounded-full border border-blue-500 bg-[#1a1a1a] px-12 py-3 text-xl font-semibold min-w-[400px] max-w-[60vw] text-center text-white shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition-all placeholder:text-gray-600"
+                placeholder="합주 제목"
+                autoFocus
+              />
+            ) : (
+              <div className="rounded-full border border-gray-700 bg-[#1a1a1a] px-12 py-3 text-xl font-semibold max-w-[60vw] text-center text-gray-100 shadow-xl">
+                <span className="truncate block">{displayTitle}</span>
+              </div>
+            )}
           </div>
         </div>
       </header>
-        <div className="flex items-center gap-2 mb-4">
-          <h2 className="text-xl font-bold text-gray-100">합주 정보</h2>
-          <div className="h-px flex-1 bg-gray-800"></div>
-        </div>
+
+      {/* 합주 정보 & 수정 토글 버튼 영역 */}
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-xl font-bold text-gray-100">합주 정보</h2>
+        <div className="h-px flex-1 bg-gray-800"></div>
+        
+        {isEditing ? (
+          <div className="flex gap-2">
+            <button onClick={handleSaveInfo} className="flex items-center gap-1 text-sm bg-blue-600 px-3 py-1.5 rounded-lg text-white hover:bg-blue-500 transition shadow-lg shadow-blue-900/20">
+              <Save size={14} /> 저장
+            </button>
+            <button onClick={handleCancelEdit} className="flex items-center gap-1 text-sm bg-gray-700 border border-gray-600 px-3 py-1.5 rounded-lg text-white hover:bg-gray-600 transition">
+              <X size={14} /> 취소
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setIsEditing(true)} className="flex items-center gap-1 text-sm bg-[#1a1a1a] border border-gray-700 px-3 py-1.5 rounded-lg text-gray-300 hover:bg-gray-800 transition">
+            <Edit2 size={14} /> 정보 수정
+          </button>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
         {/* 날짜 */}
         <div className="rounded-xl border border-gray-800 bg-[#1a1a1a] p-5 flex flex-col gap-2 hover:border-gray-700 transition-colors">
@@ -137,15 +219,25 @@ function get_instrument_icon(sessions?: string[]) {
           </div>
         </div>
 
-        {/* 장소 */}
-        <div className="rounded-xl border border-gray-800 bg-[#1a1a1a] p-5 flex flex-col gap-2 hover:border-gray-700 transition-colors">
-          <div className="flex items-center gap-2 text-sm text-gray-400">
+        {/* ✅ 장소 입력/표시 */}
+        <div className="rounded-xl border border-gray-800 bg-[#1a1a1a] p-5 flex flex-col justify-center hover:border-gray-700 transition-colors">
+          <div className="flex items-center gap-2 text-sm text-gray-400 mb-2">
             <MapPin className="w-4 h-4 text-blue-500" />
             <span>장소</span>
           </div>
-          <div className="text-lg font-medium text-gray-200">
-            {ensemble.location ?? "-"}
-          </div>
+          
+          {isEditing ? (
+            <input 
+              value={editLocation} 
+              onChange={(e) => setEditLocation(e.target.value)}
+              className="w-full rounded-lg border border-gray-700 bg-[#121212] px-3 py-2 text-base text-white placeholder-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+              placeholder="장소를 입력하세요"
+            />
+          ) : (
+            <div className="text-lg font-medium text-gray-200">
+              {displayLocation}
+            </div>
+          )}
         </div>
       </div>
 
