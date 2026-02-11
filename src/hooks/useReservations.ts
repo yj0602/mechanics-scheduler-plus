@@ -5,8 +5,6 @@ import { formatToDbDate } from "@/utils/date";
 import type { Ensemble, Participant } from "@/types/ensemble_detail";
 import type { Concert, SetListItem } from "@/types/concert_detail";
 
-const mockUserName = "장혁재";
-
 // Supabase에서 가져온 데이터 타입 (DB 원본)
 type EnsembleRow = {
   id: string;
@@ -79,7 +77,6 @@ const rowToConcert = (row: ConcertRow): Concert => ({
 
 const ensembleToReservation = (e: Ensemble): Reservation => ({
   id: e.id,
-  user_name: mockUserName,
   purpose: e.title,
   kind: "ensemble",
   date: e.date,
@@ -92,7 +89,6 @@ const ensembleToReservation = (e: Ensemble): Reservation => ({
 
 const concertToReservation = (c: Concert): Reservation => ({
   id: c.id,
-  user_name: mockUserName,
   purpose: `🌟 ${c.title}`,
   kind: "concert",
   date: c.date,
